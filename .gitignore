@@ -1,5 +1,15 @@
-data/
-bin/
+bulk_data
+logs/
+wandb/
+*.mp4
+*.jpg
+*.pth
+*.png
+*.ipynb
+temp/
+batch_scripts/
+outputs/
+notebooks/
 
 # Created by https://www.toptal.com/developers/gitignore/api/linux,windows,macos,c++,c,python,git,vim,visualstudiocode,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,windows,macos,c++,c,python,git,vim,visualstudiocode,cmake
@@ -396,3 +406,4 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,windows,macos,c++,c,python,git,vim,visualstudiocode,cmake
+
