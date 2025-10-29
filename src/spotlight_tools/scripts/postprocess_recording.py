@@ -6,11 +6,12 @@ from pathlib import Path
 
 from spotlight_tools.common import load_spotlight_tools_config
 from spotlight_tools.postprocessing.stage import interp_stage_pos_at_behavior_frames
-from spotlight_tools.postprocessing.behavior import decode_and_transform_behavior_frames
-from spotlight_tools.postprocessing.muscle import map_muscle_frames_to_behavior
+from spotlight_tools.postprocessing.behavior import decode_and_align_all_behavior_frames
+from spotlight_tools.postprocessing.muscle import warp_all_muscle_frames_to_behavior
 from spotlight_tools.postprocessing.visualize import (
     generate_summary_video,
     generate_overlay_samples,
+    visualize_stage_trajectory,
 )
 
 
@@ -26,7 +27,7 @@ def postprocess_recording_data(
     overwrite: bool = False,
     with_muscle: bool = False,
     make_visualizations: bool = True,
-    play_fps: int = 30,
+    play_fps: int = 33,
     behavior_video_crf: int = 12,
     behavior_video_preset: str = "slow",
     visualization_crf: int = 20,
@@ -72,7 +73,7 @@ def postprocess_recording_data(
         play_fps (int): Frame rate for generated videos. This is for visualization only.
             It has no impact on the actual data saved. It merely sets the metadata that
             tells video players how fast "1x speed" is. For example, if behavior frames
-            are recorded at 300 FPS, and play_fps is 30, then the default playback speed
+            are recorded at 330 FPS, and play_fps is 33, then the default playback speed
             ("1x" as far as your video player is concerned) will be 0.1x speed.
         behavior_video_crf (int): Constant Rate Factor for video encoding quality. Lower
             is better. 12-17 is visually lossless for most purposes. <10 is overkill.
@@ -137,7 +138,7 @@ def postprocess_recording_data(
     config = load_spotlight_tools_config()
     raw_behavior_frame_paths = sorted(recording_dir.glob("behavior_images/behavior_frame_*.jpg"))
     logger.info("Decoding and transforming behavior frames...")
-    decode_and_transform_behavior_frames(
+    decode_and_align_all_behavior_frames(
         raw_behavior_frame_paths=raw_behavior_frame_paths,
         sleap_model_dir=Path(config["pose2d"]["sleap_model_dir"]).expanduser(),
         output_video_path=processed_dir / "aligned_behavior_video.mkv",
@@ -159,7 +160,7 @@ def postprocess_recording_data(
     if with_muscle:
         logger.info("Mapping muscle frames to behavior frames...")
         # fmt: off
-        map_muscle_frames_to_behavior(
+        warp_all_muscle_frames_to_behavior(
             muscle_calib_path=recording_dir / "metadata/calibration_parameters_muscle.yaml",
             behavior_calib_path=recording_dir / "metadata/calibration_parameters_behavior.yaml",
             dual_recording_timing_path=recording_dir / "metadata/dual_recording_timing.yaml",
@@ -180,7 +181,7 @@ def postprocess_recording_data(
         generate_summary_video(
             behavior_video_path=processed_dir / "aligned_behavior_video.mkv",
             muscle_images_dir=processed_dir / "aligned_muscle_images",
-            dual_recording_timing_path=recording_dir / "metadata/dual_recording_timing.yaml",
+            dual_recording_timing_metadata_path=recording_dir / "metadata/dual_recording_timing.yaml",
             pose_2d_path=processed_dir / "behavior_alignment_transforms.h5",
             output_path=processed_dir / "summary_video.mp4",
             with_muscle=with_muscle,
@@ -188,6 +189,11 @@ def postprocess_recording_data(
             play_fps=play_fps,
             crf=visualization_crf,
             preset=visualization_preset,
+        )
+        
+        visualize_stage_trajectory(
+            behavior_frame_metadata_path=processed_dir / "behavior_frames_metadata.csv",
+            output_path=processed_dir / "stage_trajectory.png",
         )
         # fmt: on
 
@@ -198,7 +204,7 @@ def postprocess_recording_data(
                 behavior_video_path=processed_dir / "aligned_behavior_video.mkv",
                 muscle_images_dir=processed_dir / "aligned_muscle_images",
                 muscle_metadata_path=processed_dir / "muscle_frames_metadata.csv",
-                dual_recording_timing_path=recording_dir / "metadata/dual_recording_timing.yaml",
+                dual_recording_timing_metadata_path=recording_dir / "metadata/dual_recording_timing.yaml",
                 output_dir=processed_dir / "overlay_samples",
                 muscle_vrange=muscle_vrange,
                 num_samples=num_muscle_samples,

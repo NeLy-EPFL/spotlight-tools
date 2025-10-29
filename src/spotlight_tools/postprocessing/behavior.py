@@ -12,7 +12,7 @@ from joblib import Parallel, delayed
 from spotlight_tools.common.video import write_video
 
 
-def decode_and_transform_behavior_frames(
+def decode_and_align_all_behavior_frames(
     *,
     raw_behavior_frame_paths: list[Path],
     sleap_model_dir: Path,
@@ -77,7 +77,7 @@ def decode_and_transform_behavior_frames(
 
         # Expand pseudo 3-channel frames into separate 1-channel frames
         logger.info("Running SLEAP 2D pose estimation on expanded frames")
-        keypoints_xy_pre_alignment = estimate_2dpose(
+        keypoints_xy_pre_alignment = estimate_2dpose_sequence(
             single_channel_frame_paths,
             sleap_model_dir,
             keypoints_code2name,
@@ -145,7 +145,7 @@ def _expand_all_pseudo_bgr_images(
         f"(effectively {parallel_mapper._effective_n_jobs()}) workers"
     )
     single_channel_frame_paths_grouped = parallel_mapper(
-        delayed(expand_pseudo_bgr_image)(
+        delayed(expand_single_pseudo_bgr_image)(
             input_path, single_channel_frames_dir / f"frame_{i:06d}"
         )
         for i, input_path in enumerate(pseudo3ch_frame_paths)
@@ -157,7 +157,7 @@ def _expand_all_pseudo_bgr_images(
     return single_channel_frame_paths
 
 
-def expand_pseudo_bgr_image(
+def expand_single_pseudo_bgr_image(
     pseudo3ch_frame_path: Path, output_path_stem: Path
 ) -> list[Path]:
     """Spotlight saves 3 adjacent behavior images as a single pseudo-BGR
@@ -183,7 +183,7 @@ def expand_pseudo_bgr_image(
     return output_paths
 
 
-def estimate_2dpose(
+def estimate_2dpose_sequence(
     single_channel_frame_paths: list[Path],
     sleap_model_dir: Path,
     keypoints_code2name: dict[str, str],
@@ -241,9 +241,7 @@ def estimate_2dpose(
     return keypoints_xy  # (num_frames, num_keypoints, 2)
 
 
-def fill_keypoints_gaps(
-    keypoints_xy: np.ndarray,
-) -> np.ndarray:
+def fill_gaps_in_2dpose_sequence(keypoints_xy: np.ndarray) -> np.ndarray:
     """Fill missing keypoints (NaN values) using forward and backward filling.
 
     If any keypoint in a frame is NaN, it is filled with the last valid keypoints.
@@ -285,7 +283,7 @@ def fill_keypoints_gaps(
     return keypoints_xy_filled
 
 
-def transform_frame_to_align(
+def transform_single_frame_to_align(
     input_frame: np.ndarray,
     keypoints: np.ndarray,
     crop_dim: int,
@@ -377,7 +375,9 @@ def _transform_all_frames_to_align(
     logger = logging.getLogger(__name__)
     verbosity = 1 if logger.level <= logging.INFO else 0
 
-    keypoints_xy_pre_alignment_filled = fill_keypoints_gaps(keypoints_xy_pre_alignment)
+    keypoints_xy_pre_alignment_filled = fill_gaps_in_2dpose_sequence(
+        keypoints_xy_pre_alignment
+    )
     num_frames = len(expanded_frame_paths)
     thorax_idx = list(keypoints_code2name.values()).index("thorax")
     neck_idx = list(keypoints_code2name.values()).index("neck")
@@ -386,7 +386,7 @@ def _transform_all_frames_to_align(
     def _process_frame(i):
         input_frame = cv2.imread(str(expanded_frame_paths[i]), cv2.IMREAD_UNCHANGED)
         keypoints = keypoints_xy_pre_alignment_filled[i, :, :]
-        return transform_frame_to_align(
+        return transform_single_frame_to_align(
             input_frame, keypoints, crop_dim, thorax_idx, neck_idx, abdomen_idx
         )
 
