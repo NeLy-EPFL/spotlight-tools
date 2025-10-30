@@ -11,6 +11,8 @@ from spotlight_tools.calibration import (
     SpotlightPositionMapper,
     BehaviorMuscleCrossMapper,
 )
+from spotlight_tools.common.video import get_video_info
+from spotlight_tools.postprocessing.io import check_output_path_against_alignment_flag
 
 
 _imwrite_compression_params = [cv2.IMWRITE_TIFF_COMPRESSION, 5]
@@ -23,16 +25,18 @@ _imwrite_compression_params = [cv2.IMWRITE_TIFF_COMPRESSION, 5]
 # cv::IMWRITE_TIFF_COMPRESSION_LZW is used by the recording GUI
 
 
-def map_muscle_frames_to_behavior(
+def warp_all_muscle_frames_to_behavior(
     *,
+    raw_muscle_images_dir: Path,
+    transformed_muscle_images_output_dir: Path,
     muscle_calib_path: Path,
     behavior_calib_path: Path,
     dual_recording_timing_path: Path,
     processed_behavior_frame_metadata_path: Path,
-    behavior_alignment_metadata_path: Path,
-    raw_muscle_images_dir: Path,
-    transformed_muscle_images_output_dir: Path,
     muscle_metadata_output_path: Path,
+    align_fly: bool = True,
+    behavior_alignment_metadata_path: Path | None = None,
+    processed_behavior_video_path: Path | None = None,
     missing_muscle_frames_tolerance: int = 3,
     num_workers: int = -1,
 ):
@@ -41,20 +45,29 @@ def map_muscle_frames_to_behavior(
     1. Determines timing synchronization between muscle and behavior recordings.
     2. Spatially maps muscle images to behavior coordinate system using Spotlight
        calibration parameters.
-    3. Applies the same alignment transformations used for behavior frames.
+    3. Applies the same alignment transformations used for behavior frames (if any has
+       been applied).
     4. Saves transformed muscle images in TIFF format and metadata.
 
     Args:
+        raw_muscle_images_dir (Path): Directory containing raw muscle image files.
+        transformed_muscle_images_output_dir (Path): Directory to save output frames.
         muscle_calib_path (Path): Path to muscle camera calibration parameters.
         behavior_calib_path (Path): Path to behavior camera calibration parameters.
         dual_recording_timing_path (Path): Path to dual recording timing metadata.
         processed_behavior_frame_metadata_path (Path): Path to behavior frames metadata
             (CSV).
-        behavior_alignment_metadata_path (Path): Path to behavior alignment transforms
-            (HDF5).
-        raw_muscle_images_dir (Path): Directory containing raw muscle image files.
-        transformed_muscle_images_output_dir (Path): Directory to save output frames.
         muscle_metadata_output_path (Path): Output path for muscle frames metadata (CSV).
+        align_fly (bool): Whether behavior frames have been transformed to align the
+            fly and crop the image. If True, `behavior_alignment_metadata_path` must be
+            provided. If False, `processed_behavior_video_path` must be provided.
+            Default is True.
+        behavior_alignment_metadata_path (Path | None): Path to behavior alignment
+            transforms (HDF5). Required if `align_fly` is True, ignored otherwise.
+        processed_behavior_video_path (Path | None): Path to processed behavior video
+            (MP4). Used only to get output dimensions if `align_fly` is False. Ignored
+            if `align_fly` is True (output dimensions are taken from alignment metadata
+            instead).
         missing_muscle_frames_tolerance (int): See
             `scripts.postprocess_recording.postprocess_recording_data`.
         num_workers (int): Number of parallel workers (-1 for all available cores).
@@ -64,9 +77,14 @@ def map_muscle_frames_to_behavior(
     """
     logger = logging.getLogger(__name__)
 
+    # Check if output path suggests alignment status consistent with `align_fly`
+    check_output_path_against_alignment_flag(
+        transformed_muscle_images_output_dir, align_fly
+    )
+
     # Get behavior-muscle sync ratio
     behavior_muscle_sync_ratio = get_behavior_muscle_sync_ratio(
-        dual_recording_timing_path
+        dual_recording_timing_metadata_path=dual_recording_timing_path
     )
 
     # Load the stage positions at muscle recording frames
@@ -90,9 +108,17 @@ def map_muscle_frames_to_behavior(
     ].reset_index(drop=True)
 
     # Load transformation matrices applied to behavior frames (for alignment)
-    alignment_transforms, output_dim = _load_alignment_transform_metadata(
-        behavior_alignment_metadata_path, behavior_muscle_sync_ratio
-    )
+    if align_fly:
+        alignment_transforms, output_dim = _load_alignment_transform_metadata(
+            behavior_alignment_metadata_path, behavior_muscle_sync_ratio
+        )
+    else:
+        ident_transform = np.eye(2, 3)
+        alignment_transforms = np.repeat(
+            ident_transform[None, :, :], len(muscle_image_paths), axis=0
+        )
+        width, height, _ = get_video_info(processed_behavior_video_path)
+        output_dim = (width, height)
 
     # Prepare input kwargs for parallel processing
     input_kwargs = []
@@ -123,7 +149,7 @@ def map_muscle_frames_to_behavior(
         f" (effectively {parallel_runner._effective_n_jobs()} workers)"
     )
     parallel_runner(
-        delayed(apply_affine_transform_to_muscle_image)(**kwargs)
+        delayed(warp_single_muscle_frame_to_behavior)(**kwargs)
         for kwargs in input_kwargs
     )
     logger.info(
@@ -140,21 +166,44 @@ def map_muscle_frames_to_behavior(
     logger.info(f"Muscle frame metadata saved to {muscle_metadata_output_path}")
 
 
-def get_behavior_muscle_sync_ratio(dual_recording_timing_path: Path) -> int:
+def get_behavior_muscle_sync_ratio(
+    *,
+    dual_recording_timing_metadata_path: Path | str | None,
+    recording_dir: Path | str | None = None,
+) -> int:
     """Extract behavior-to-muscle frame synchronization ratio from timing metadata."""
-    with open(dual_recording_timing_path, "r") as f:
+    if dual_recording_timing_metadata_path is None and recording_dir is None:
+        raise ValueError(
+            "Either dual_recording_timing_path or recording_dir must be provided."
+        )
+    if dual_recording_timing_metadata_path is not None and recording_dir is not None:
+        raise ValueError(
+            "Only one of dual_recording_timing_path or recording_dir should be provided."
+        )
+
+    if dual_recording_timing_metadata_path is None:
+        dual_recording_timing_metadata_path = (
+            Path(recording_dir) / "metadata/dual_recording_timing.yaml"
+        )
+
+    with open(dual_recording_timing_metadata_path, "r") as f:
         timing_metadata = yaml.safe_load(f)
     return timing_metadata["sync_ratio"]
 
 
 def _get_stage_pos_df_at_muscle_frames(
-    interpolated_stage_pos_path: Path,
-    behavior_muscle_sync_ratio: int,
+    interpolated_stage_pos_path: Path, behavior_muscle_sync_ratio: int
 ) -> pd.DataFrame:
     stage_pos_df_at_behavior_frames = pd.read_csv(interpolated_stage_pos_path)
     stage_pos_df_at_muscle_frames = stage_pos_df_at_behavior_frames[
         behavior_muscle_sync_ratio::behavior_muscle_sync_ratio
     ]
+    assert (
+        match_muscle_frameid_to_behavior_frameid(
+            0, sync_ratio=behavior_muscle_sync_ratio
+        )
+        == stage_pos_df_at_muscle_frames.iloc[0]["behavior_frame_id"]
+    ), "Muscle-to-behavior frame ID mapping mismatch."
     return stage_pos_df_at_muscle_frames
 
 
@@ -164,35 +213,35 @@ def _filter_muscle_frames_by_availability(
     missing_muscle_frames_tolerance: int = 3,
 ) -> list[Path]:
     # Index all available frames
-    _muscle_paths_by_frame_idx = {}
+    _muscle_paths_by_frameid = {}
     for path in raw_muscle_images_dir.glob("*.tif"):
         try:
-            frame_idx = int(path.stem.split("_")[-1])
+            frameid = int(path.stem.split("_")[-1])
         except ValueError:
             logging.warning(
                 f"Problem scanning muscle images: Could not parse frame index from "
                 f"file name {path.name}. Skipping this file."
             )
             continue
-        _muscle_paths_by_frame_idx[frame_idx] = path
+        _muscle_paths_by_frameid[frameid] = path
 
     # Check if each expected frame is among the frames found
     muscle_image_paths = []
     num_expected_frames = stage_pos_df_at_muscle_frames.shape[0]
-    for frame_idx in range(num_expected_frames):
-        if frame_idx not in _muscle_paths_by_frame_idx:
-            if frame_idx >= num_expected_frames - missing_muscle_frames_tolerance:
+    for frameid in range(num_expected_frames):
+        if frameid not in _muscle_paths_by_frameid:
+            if frameid >= num_expected_frames - missing_muscle_frames_tolerance:
                 # If we are almost at the end of the recording, it's ok. This could
                 # simply be due to expected synchronization/timing imperfections.
                 break
             logging.error(
-                f"Problem scanning muscle images: Frame {frame_idx} not found in "
+                f"Problem scanning muscle images: Frame {frameid} not found in "
                 f"{raw_muscle_images_dir} (a total of {num_expected_frames} is "
                 f"expected). Dataset is incomplete."
             )
             raise RuntimeError("Dataset is incomplete.")
         else:
-            muscle_image_paths.append(_muscle_paths_by_frame_idx[frame_idx])
+            muscle_image_paths.append(_muscle_paths_by_frameid[frameid])
 
     num_muscle_frames = len(muscle_image_paths)
     if num_muscle_frames != num_expected_frames:
@@ -217,7 +266,7 @@ def _load_alignment_transform_metadata(
     return alignment_transforms, output_dim
 
 
-def apply_affine_transform_to_muscle_image(
+def warp_single_muscle_frame_to_behavior(
     muscle2behavior_trans_mat: np.ndarray,
     behavior_alignment_trans_mat: np.ndarray,
     input_path: Path,
@@ -271,8 +320,8 @@ def apply_affine_transform_to_muscle_image(
 
 
 def _make_muscle_metadata_dataframe(muscle_image_paths, stage_pos_df_at_muscle_frames):
-    muscle_frame_ids = np.arange(len(muscle_image_paths))
-    behavior_frame_ids = stage_pos_df_at_muscle_frames["behavior_frame_id"].values
+    muscle_frameids = np.arange(len(muscle_image_paths))
+    behavior_frameids = stage_pos_df_at_muscle_frames["behavior_frame_id"].values
     x_pos_mm_interp = stage_pos_df_at_muscle_frames["x_pos_mm_interp"].values
     y_pos_mm_interp = stage_pos_df_at_muscle_frames["y_pos_mm_interp"].values
     acquired_time_us = []
@@ -285,14 +334,93 @@ def _make_muscle_metadata_dataframe(muscle_image_paths, stage_pos_df_at_muscle_f
 
     return pd.DataFrame(
         data={
-            "muscle_frame_id": muscle_frame_ids.astype(np.uint32),
-            "corresponding_behavior_frame_id": behavior_frame_ids.astype(np.uint32),
+            "muscle_frame_id": muscle_frameids.astype(np.uint32),
+            "corresponding_behavior_frame_id": behavior_frameids.astype(np.uint32),
             "x_pos_mm_interp": x_pos_mm_interp.astype(np.float32),
             "y_pos_mm_interp": y_pos_mm_interp.astype(np.float32),
             "acquired_time_us": np.array(acquired_time_us, dtype=np.uint64),
             "received_time_us": np.array(received_time_us, dtype=np.uint64),
         }
     )
+
+
+def match_muscle_frameid_to_behavior_frameid(
+    muscle_frameid: int | list[int],
+    *,
+    sync_ratio: int | None = None,
+    dual_recording_timing_metadata_path: Path | None = None,
+    recording_dir: Path | None = None,
+):
+    """Map muscle frame ID or IDs to corresponding behavior frame ID(s) using the
+    provided synchronization ratio.
+
+    Note that muscle recording lags behind behavior recording by one cycle. For example,
+    if the sync ratio is 10, then the 0th muscle frame is recorded at the same time as
+    the 10th behavior frame (this is handled internally by this function).
+    """
+    if sync_ratio is None:
+        sync_ratio = get_behavior_muscle_sync_ratio(
+            dual_recording_timing_metadata_path=dual_recording_timing_metadata_path,
+            recording_dir=recording_dir,
+        )
+
+    is_singleton_int = isinstance(muscle_frameid, (int, np.integer))
+    if is_singleton_int:
+        muscle_frameid = [muscle_frameid]
+
+    behavior_frameid = [(mfid + 1) * sync_ratio for mfid in muscle_frameid]
+
+    if is_singleton_int:
+        behavior_frameid = behavior_frameid[0]
+    return behavior_frameid
+
+
+def match_behavior_frameid_to_muscle_frameid(
+    behavior_frameid: int | list[int],
+    method: str,
+    *,
+    sync_ratio: int | None = None,
+    dual_recording_timing_metadata_path: Path | None = None,
+    recording_dir: Path | None = None,
+):
+    """Map behavior frame ID or IDs to corresponding muscle frame ID(s) using the
+    provided synchronization ratio.
+
+    Because there are more behavior frames than muscle frames, multiple behavior frames
+    will correspond to the same muscle frame. The selection of which muscle frame to
+    return is controlled by the `method` argument:
+    - "floor": use the last available muscle frame.
+    - "nearest": use the temporally closest muscle frame (might be in the future).
+
+    Note that muscle recording lags behind behavior recording by one cycle. For example,
+    if the sync ratio is 10, then the 0th muscle frame is recorded at the same time as
+    the 10th behavior frame (this is handled internally by this function).
+    """
+    if sync_ratio is None:
+        sync_ratio = get_behavior_muscle_sync_ratio(
+            dual_recording_timing_metadata_path=dual_recording_timing_metadata_path,
+            recording_dir=recording_dir,
+        )
+    if method.lower() not in ["floor", "nearest"]:
+        raise ValueError(
+            f"Invalid method '{method}'. Supported methods are 'floor' and 'nearest'."
+        )
+
+    is_singleton_int = isinstance(behavior_frameid, (int, np.integer))
+    if is_singleton_int:
+        behavior_frameid = [behavior_frameid]
+
+    muscle_frameid = []
+    for bfid in behavior_frameid:
+        if method == "floor":
+            mfid = int((bfid - sync_ratio) / sync_ratio)
+        elif method == "nearest":
+            mfid = round((bfid - sync_ratio) / sync_ratio)
+        muscle_frameid.append(mfid)
+
+    if is_singleton_int:
+        muscle_frameid = muscle_frameid[0]
+    return muscle_frameid
 
 
 # if __name__ == "__main__":

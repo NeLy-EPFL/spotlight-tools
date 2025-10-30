@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import svgwrite
 
 
-def get_aruco_parameters(camera):
+def _get_opencv_aruco_detection_params(camera):
     """Get ArUco detection parameters for different cameras.
 
     These parameters very empirically tuned for the two cameras
@@ -34,7 +34,7 @@ def get_aruco_parameters(camera):
         raise ValueError("camera must be either 'behavior_camera' or 'muscle_camera'.")
 
 
-def preprocess_image(image, camera):
+def _preprocess_image(image, camera):
     if camera == "behavior_camera":
         return image.copy()  # make a copy to avoid modifying the original
     elif camera == "muscle_camera":
@@ -72,7 +72,7 @@ def detect_aruco(
         raise ValueError("camera must be either 'behavior_camera' or 'muscle_camera'.")
 
     # Preprocess image
-    working_image = preprocess_image(image, camera)
+    working_image = _preprocess_image(image, camera)
 
     # Get image dimensions
     num_rows, num_cols = working_image.shape
@@ -85,7 +85,7 @@ def detect_aruco(
     aruco_dict = cv2.aruco.getPredefinedDictionary(dictionary)
 
     # Detect ArUco markers
-    aruco_detection_params = get_aruco_parameters(camera)
+    aruco_detection_params = _get_opencv_aruco_detection_params(camera)
     detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_detection_params)
     corners, ids, rejected = detector.detectMarkers(working_image)
 

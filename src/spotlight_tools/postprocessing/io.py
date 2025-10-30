@@ -37,3 +37,21 @@ def find_files_per_frame_by_suffix(
     )
 
     return sorted_files_by_frame
+
+
+def check_output_path_against_alignment_flag(output_path: Path, align_fly: bool):
+    """Check if the output path suggests the output is aligned when it's not, or vice
+    versa. If so, log an error message."""
+    logger = logging.getLogger(__name__)
+
+    out_path_no_delim = str(output_path).replace("_", "").replace("-", "").lower()
+    if align_fly and ("fullsize" in out_path_no_delim):
+        logger.error(
+            f"Output path ({output_path}) suggests full-size frames, "
+            "but `align_fly` is True. The output frames WILL be cropped and aligned."
+        )
+    if (not align_fly) and ("aligned" in out_path_no_delim):
+        logger.error(
+            f"Output path ({output_path}) suggests aligned frames, "
+            "but `align_fly` is False. The output frames WILL NOT be aligned."
+        )
