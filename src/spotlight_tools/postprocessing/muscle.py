@@ -11,6 +11,8 @@ from spotlight_tools.calibration import (
     SpotlightPositionMapper,
     BehaviorMuscleCrossMapper,
 )
+from spotlight_tools.common.video import get_video_info
+from spotlight_tools.postprocessing.io import check_output_path_against_alignment_flag
 
 
 _imwrite_compression_params = [cv2.IMWRITE_TIFF_COMPRESSION, 5]
@@ -25,14 +27,16 @@ _imwrite_compression_params = [cv2.IMWRITE_TIFF_COMPRESSION, 5]
 
 def warp_all_muscle_frames_to_behavior(
     *,
+    raw_muscle_images_dir: Path,
+    transformed_muscle_images_output_dir: Path,
     muscle_calib_path: Path,
     behavior_calib_path: Path,
     dual_recording_timing_path: Path,
     processed_behavior_frame_metadata_path: Path,
-    behavior_alignment_metadata_path: Path,
-    raw_muscle_images_dir: Path,
-    transformed_muscle_images_output_dir: Path,
     muscle_metadata_output_path: Path,
+    align_fly: bool = True,
+    behavior_alignment_metadata_path: Path | None = None,
+    processed_behavior_video_path: Path | None = None,
     missing_muscle_frames_tolerance: int = 3,
     num_workers: int = -1,
 ):
@@ -41,20 +45,29 @@ def warp_all_muscle_frames_to_behavior(
     1. Determines timing synchronization between muscle and behavior recordings.
     2. Spatially maps muscle images to behavior coordinate system using Spotlight
        calibration parameters.
-    3. Applies the same alignment transformations used for behavior frames.
+    3. Applies the same alignment transformations used for behavior frames (if any has
+       been applied).
     4. Saves transformed muscle images in TIFF format and metadata.
 
     Args:
+        raw_muscle_images_dir (Path): Directory containing raw muscle image files.
+        transformed_muscle_images_output_dir (Path): Directory to save output frames.
         muscle_calib_path (Path): Path to muscle camera calibration parameters.
         behavior_calib_path (Path): Path to behavior camera calibration parameters.
         dual_recording_timing_path (Path): Path to dual recording timing metadata.
         processed_behavior_frame_metadata_path (Path): Path to behavior frames metadata
             (CSV).
-        behavior_alignment_metadata_path (Path): Path to behavior alignment transforms
-            (HDF5).
-        raw_muscle_images_dir (Path): Directory containing raw muscle image files.
-        transformed_muscle_images_output_dir (Path): Directory to save output frames.
         muscle_metadata_output_path (Path): Output path for muscle frames metadata (CSV).
+        align_fly (bool): Whether behavior frames have been transformed to align the
+            fly and crop the image. If True, `behavior_alignment_metadata_path` must be
+            provided. If False, `processed_behavior_video_path` must be provided.
+            Default is True.
+        behavior_alignment_metadata_path (Path | None): Path to behavior alignment
+            transforms (HDF5). Required if `align_fly` is True, ignored otherwise.
+        processed_behavior_video_path (Path | None): Path to processed behavior video
+            (MP4). Used only to get output dimensions if `align_fly` is False. Ignored
+            if `align_fly` is True (output dimensions are taken from alignment metadata
+            instead).
         missing_muscle_frames_tolerance (int): See
             `scripts.postprocess_recording.postprocess_recording_data`.
         num_workers (int): Number of parallel workers (-1 for all available cores).
@@ -63,6 +76,11 @@ def warp_all_muscle_frames_to_behavior(
         None: Outputs are saved to the specified directories and files.
     """
     logger = logging.getLogger(__name__)
+
+    # Check if output path suggests alignment status consistent with `align_fly`
+    check_output_path_against_alignment_flag(
+        transformed_muscle_images_output_dir, align_fly
+    )
 
     # Get behavior-muscle sync ratio
     behavior_muscle_sync_ratio = get_behavior_muscle_sync_ratio(
@@ -90,9 +108,17 @@ def warp_all_muscle_frames_to_behavior(
     ].reset_index(drop=True)
 
     # Load transformation matrices applied to behavior frames (for alignment)
-    alignment_transforms, output_dim = _load_alignment_transform_metadata(
-        behavior_alignment_metadata_path, behavior_muscle_sync_ratio
-    )
+    if align_fly:
+        alignment_transforms, output_dim = _load_alignment_transform_metadata(
+            behavior_alignment_metadata_path, behavior_muscle_sync_ratio
+        )
+    else:
+        ident_transform = np.eye(2, 3)
+        alignment_transforms = np.repeat(
+            ident_transform[None, :, :], len(muscle_image_paths), axis=0
+        )
+        width, height, _ = get_video_info(processed_behavior_video_path)
+        output_dim = (width, height)
 
     # Prepare input kwargs for parallel processing
     input_kwargs = []

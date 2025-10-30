@@ -2,14 +2,14 @@ import cv2
 import h5py
 import numpy as np
 import logging
-import yaml
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from sleap_io import Video
 from sleap_nn.predict import run_inference
 from joblib import Parallel, delayed
 
-from spotlight_tools.common.video import write_video
+from spotlight_tools.common.video import get_video_writer
+from spotlight_tools.postprocessing.io import check_output_path_against_alignment_flag
 
 
 def decode_and_align_all_behavior_frames(
@@ -19,10 +19,11 @@ def decode_and_align_all_behavior_frames(
     output_video_path: Path,
     output_metadata_path: Path,
     keypoints_code2name: dict[str, str],
+    align_fly: bool = True,
     use_shm: bool = False,
     sleap_batch_size: int = 128,
     crop_dim: int = 900,
-    play_fps: int = 30,
+    play_fps: int = 33,
     behavior_video_crf: int = 12,
     behavior_video_preset: str = "slow",
     num_workers: int = -1,
@@ -32,8 +33,10 @@ def decode_and_align_all_behavior_frames(
     1. Expands pseudo-BGR JPEG images into separate monochrome frames (during recording,
        every three consecutive frames are saved as a single 3-channel JPEG for
        performance considerations)
-    2. Runs a 3-keypoint pose estimation with SLEAP to detect fly position and heading
-    3. Transforms frames to align and center the fly (facing upward)
+    2. (If `align_fly` is True) Runs a 3-keypoint pose estimation with SLEAP to detect
+       fly position and heading
+    3. (If `align_fly` is True) Transforms frames to align and center the fly (facing
+       upward)
     4. Outputs an aligned behavior video and transformation metadata
 
     Args:
@@ -43,6 +46,9 @@ def decode_and_align_all_behavior_frames(
         output_metadata_path (Path): Path for the transformation metadata (HDF5).
         keypoints_code2name (dict[str, str]): Mapping from keypoint codes (used by
             SLEAP) to meaningful names.
+        align_fly (bool): If False, skip pose estimation and frame alignment; simply
+            decode pseudo-BGR images into separate monochrome frames and save as video.
+            Default is True.
         use_shm (bool): Whether to use shared memory (/dev/shm) for temporary files.
             Doing so will avoid duplicated disk read and write, but it is extremely
             sketchy - if the process runs out of shared memory, the entire OS will
@@ -61,6 +67,9 @@ def decode_and_align_all_behavior_frames(
     # Set logging verbosity
     logger = logging.getLogger(__name__)
 
+    # Check if output path suggests alignment status consistent with `align_fly`
+    check_output_path_against_alignment_flag(output_video_path, align_fly)
+
     with TemporaryDirectory(dir="/dev/shm" if use_shm else None) as tmpdir:
         logger.info(
             f"Processing {len(raw_behavior_frame_paths)} pseudo-BGR frames under "
@@ -75,49 +84,61 @@ def decode_and_align_all_behavior_frames(
             raw_behavior_frame_paths, expanded_frames_dir, num_workers=num_workers
         )
 
-        # Expand pseudo 3-channel frames into separate 1-channel frames
-        logger.info("Running SLEAP 2D pose estimation on expanded frames")
-        keypoints_xy_pre_alignment = estimate_2dpose_sequence(
-            single_channel_frame_paths,
-            sleap_model_dir,
-            keypoints_code2name,
-            output_path=Path(tmpdir) / "sleap_predictions.slp",  # will be deleted
-            batch_size=sleap_batch_size,
-        )
-
-        # Transform frame by frame based on keypoints
-        logger.info("Transforming behavior frames to align the fly")
-        transformed_frames, transformed_keypoints, transform_matrices = (
-            _transform_all_frames_to_align(
-                keypoints_xy_pre_alignment,
+        if align_fly:
+            # Run SLEAP 2D pose estimation on single-channel frames
+            logger.info("Running SLEAP 2D pose estimation on expanded frames")
+            keypoints_xy_pre_alignment = estimate_2dpose_sequence(
                 single_channel_frame_paths,
+                sleap_model_dir,
                 keypoints_code2name,
-                crop_dim,
-                num_workers=num_workers,
+                output_path=Path(tmpdir) / "sleap_predictions.slp",  # will be deleted
+                batch_size=sleap_batch_size,
             )
-        )
 
-        # Save transformed frames as video and transformation metadata
+            # Transform frame by frame based on keypoints
+            logger.info("Transforming behavior frames to align the fly")
+            transformed_frame_paths, transformed_keypoints, transform_matrices = (
+                _transform_all_frames_to_align(
+                    keypoints_xy_pre_alignment,
+                    single_channel_frame_paths,
+                    keypoints_code2name,
+                    crop_dim,
+                    output_dir=Path(tmpdir) / "aligned_frames",
+                    num_workers=num_workers,
+                )
+            )
+
+        # Save transformed frames as video
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
-        output_metadata_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Saving aligned behavior video to {output_video_path}")
-        write_video(
+        video_writer = get_video_writer(
             output_path=output_video_path,
-            frames=transformed_frames,
             fps=play_fps,
             crf=behavior_video_crf,
             preset=behavior_video_preset,
             logging=logger.level <= logging.INFO,
         )
-        logger.info(f"Saving transformation metadata to {output_metadata_path}")
-        _save_transformation_metadata(
-            output_path=output_metadata_path,
-            keypoints_xy_pre_alignment=keypoints_xy_pre_alignment,
-            transformed_keypoints=transformed_keypoints,
-            transform_matrices=transform_matrices,
-            keypoints_code2name=keypoints_code2name,
-            output_dim=(crop_dim, crop_dim),
-        )
+        if align_fly:
+            frame_paths_to_write = transformed_frame_paths
+        else:
+            frame_paths_to_write = single_channel_frame_paths
+        for frame_path in frame_paths_to_write:
+            frame = cv2.imread(str(frame_path), cv2.IMREAD_UNCHANGED)
+            video_writer.write(frame)
+        video_writer.close()
+
+        # Save transformation metadata if fly alignment was performed
+        if align_fly:
+            logger.info(f"Saving transformation metadata to {output_metadata_path}")
+            output_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            _save_transformation_metadata(
+                output_path=output_metadata_path,
+                keypoints_xy_pre_alignment=keypoints_xy_pre_alignment,
+                transformed_keypoints=transformed_keypoints,
+                transform_matrices=transform_matrices,
+                keypoints_code2name=keypoints_code2name,
+                output_dim=(crop_dim, crop_dim),
+            )
 
 
 def _expand_all_pseudo_bgr_images(
@@ -290,7 +311,7 @@ def transform_single_frame_to_align(
     thorax_idx: int,
     neck_idx: int,
     abdomen_idx: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Transform a single behavior frame to align and center the fly.
 
     The transformation rotates the frame so the fly faces upward (head toward
@@ -354,8 +375,9 @@ def _transform_all_frames_to_align(
     expanded_frame_paths: list[Path],
     keypoints_code2name: dict[str, str],
     crop_dim: int,
+    output_dir: Path,
     num_workers: int = -1,
-) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
+) -> tuple[list[Path], np.ndarray, np.ndarray]:
     """Transform all behavior frames to align and center the fly in parallel.
 
     Args:
@@ -365,15 +387,18 @@ def _transform_all_frames_to_align(
         keypoints_code2name (dict[str, str]): Mapping from keypoint codes (used by
             SLEAP) to meaningful names.
         crop_dim (int): Output frame dimensions (actual size is crop_dim x crop_dim).
+        output_dir (Path): Directory where transformed frames will be saved.
         num_workers (int): Number of parallel workers (-1 for all available cores).
 
     Returns:
-        list[np.ndarray]: Transformed frames.
+        list[Path]: Paths to the transformed frames.
         np.ndarray: Transformed keypoints with shape (num_frames, num_keypoints, 2).
         np.ndarray: Transformation matrices with shape (num_frames, 2, 3).
     """
     logger = logging.getLogger(__name__)
     verbosity = 1 if logger.level <= logging.INFO else 0
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     keypoints_xy_pre_alignment_filled = fill_gaps_in_2dpose_sequence(
         keypoints_xy_pre_alignment
@@ -386,9 +411,14 @@ def _transform_all_frames_to_align(
     def _process_frame(i):
         input_frame = cv2.imread(str(expanded_frame_paths[i]), cv2.IMREAD_UNCHANGED)
         keypoints = keypoints_xy_pre_alignment_filled[i, :, :]
-        return transform_single_frame_to_align(
-            input_frame, keypoints, crop_dim, thorax_idx, neck_idx, abdomen_idx
+        transformed_frame, transformed_keypoints, transform_matrix = (
+            transform_single_frame_to_align(
+                input_frame, keypoints, crop_dim, thorax_idx, neck_idx, abdomen_idx
+            )
         )
+        output_path = output_dir / f"aligned_frame_{i:06d}.jpg"
+        cv2.imwrite(str(output_path), transformed_frame)
+        return output_path, transformed_keypoints, transform_matrix
 
     parallel_mapper = Parallel(n_jobs=num_workers, backend="loky", verbose=verbosity)
     logger.info(
@@ -397,12 +427,12 @@ def _transform_all_frames_to_align(
     )
     results = parallel_mapper(delayed(_process_frame)(i) for i in range(num_frames))
     logger.info("Finished transforming behavior images")
-    transformed_frames, transformed_keypoints, transform_matrices = zip(*results)
-    transformed_frames = list(transformed_frames)
+    transformed_frame_paths, transformed_keypoints, transform_matrices = zip(*results)
+    transformed_frame_paths = list(transformed_frame_paths)
     transformed_keypoints = np.array(transformed_keypoints)
     transform_matrices = np.array(transform_matrices)
 
-    return transformed_frames, transformed_keypoints, transform_matrices
+    return transformed_frame_paths, transformed_keypoints, transform_matrices
 
 
 def _save_transformation_metadata(
@@ -459,6 +489,6 @@ def _save_transformation_metadata(
 #         use_shm=False,
 #         keypoints_code2name=config["pose2d"]["keypoint_names"],
 #         crop_dim=900,
-#         play_fps=30,
+#         play_fps=33,
 #     )
 #     # fmt: on
