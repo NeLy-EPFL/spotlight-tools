@@ -31,7 +31,7 @@ def visualize_stage_trajectory(
     the figure.
 
     Args:
-        behavior_frame_metadata_path (Path): DataFrame containing at
+        behavior_frame_metadata_path (Path): Path to CSV file containing at
             least the columns `x_pos_mm_interp`, `y_pos_mm_interp` and
             `received_time_us` used to plot the trajectory and color by time.
         output_path (Path | None): Optional path to save the figure.
@@ -511,7 +511,7 @@ def generate_overlay_samples(
     behavior_video_reader = cv2.VideoCapture(str(behavior_video_path))
 
     # Generate samples
-    print("Generating samples overlay images...")
+    print(f"Generating {num_samples} samples overlay images...")
     output_dir.mkdir(parents=True, exist_ok=True)
     for muscle_frameid in sample_muscle_frameids:
         metadata_entry = muscle_metadata_df.iloc[muscle_frameid]

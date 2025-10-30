@@ -251,26 +251,26 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
+    main()
 
     # * Example from Python natively
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    # logging.basicConfig(
+    #     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    # )
     # # With muscle, aligned
-    postprocess_recording_data(
-        recording_dir=Path("~/Data/spotlight/20250613-fly1b-002/").expanduser(),
-        with_muscle=True,
-        overwrite=True,
-        align_fly=True,
-    )
-    # With muscle, full-size
-    postprocess_recording_data(
-        recording_dir=Path("~/Data/spotlight/20250613-fly1b-002/").expanduser(),
-        with_muscle=True,
-        overwrite=True,
-        align_fly=False,
-    )
+    # postprocess_recording_data(
+    #     recording_dir=Path("~/Data/spotlight/20250613-fly1b-002/").expanduser(),
+    #     with_muscle=True,
+    #     overwrite=True,
+    #     align_fly=True,
+    # )
+    # # With muscle, full-size
+    # postprocess_recording_data(
+    #     recording_dir=Path("~/Data/spotlight/20250613-fly1b-002/").expanduser(),
+    #     with_muscle=True,
+    #     overwrite=True,
+    #     align_fly=False,
+    # )
     # # Without muscle, aligned
     # postprocess_recording_data(
     #     recording_dir=Path("~/Data/spotlight/20250613-fly1b-002/").expanduser(),
