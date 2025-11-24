@@ -4943,6 +4943,8 @@ files = [
     {file = "ruamel.yaml.clib-0.2.14-cp39-cp39-win32.whl", hash = "sha256:6d5472f63a31b042aadf5ed28dd3ef0523da49ac17f0463e10fda9c4a2773352"},
     {file = "ruamel.yaml.clib-0.2.14-cp39-cp39-win_amd64.whl", hash = "sha256:8dd3c2cc49caa7a8d64b67146462aed6723a0495e44bf0aa0a2e94beaa8432f6"},
     {file = "ruamel.yaml.clib-0.2.14.tar.gz", hash = "sha256:803f5044b13602d58ea378576dd75aa759f52116a0232608e8fdada4da33752e"},
+    {file = "ruamel_yaml_clib-0.2.14-cp314-cp314-win32.whl", hash = "sha256:9b4104bf43ca0cd4e6f738cb86326a3b2f6eef00f417bd1e7efb7bdffe74c539"},
+    {file = "ruamel_yaml_clib-0.2.14-cp314-cp314-win_amd64.whl", hash = "sha256:13997d7d354a9890ea1ec5937a219817464e5cc344805b37671562a401ca3008"},
 ]
 
 [[package]]
@@ -6294,26 +6296,27 @@ zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
 name = "vidgear"
-version = "0.3.3"
+version = "0.3.4"
 description = "High-performance cross-platform Video Processing Python framework powerpacked with unique trailblazing features."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "vidgear-0.3.3-py3-none-any.whl", hash = "sha256:b5939b23b67bc1af6b21a78f58b771917b75f51b18207b75911a998a614208b1"},
-    {file = "vidgear-0.3.3.tar.gz", hash = "sha256:4f25c74d6e65a54e26d12fb518423432ed16950fc081665896fc6640ec12f24e"},
+    {file = "vidgear-0.3.4-py3-none-any.whl", hash = "sha256:4d04bc9b122da6afddc00cf69b3f9215e1ba3643e911365d2adfa79e69b85450"},
+    {file = "vidgear-0.3.4.tar.gz", hash = "sha256:2c4d597f66be6308dcdc7b5797d6c3f772dd03f33b3bf9f92dea3623c1fd6115"},
 ]
 
 [package.dependencies]
 colorlog = "*"
 cython = "*"
 numpy = "*"
+packaging = "*"
 requests = "*"
 tqdm = "*"
 
 [package.extras]
-asyncio = ["Pillow", "aiortc (>=1.9.0)", "jinja2", "msgpack (>=1.1.0rc1)", "msgpack-numpy (>=0.4.8)", "mss (>=9.0.1)", "pyscreenshot (>=3.1)", "pyzmq (>=26.0.3)", "simplejpeg (>=1.7.3)", "starlette (>=0.37.2)", "uvicorn (>=0.30.1)", "yt-dlp (>=2024.6.21.232706.dev0)"]
-core = ["Pillow", "mss (>=9.0.1)", "pyscreenshot (>=3.1)", "pyzmq (>=26.0.3)", "simplejpeg (>=1.7.3)", "yt-dlp (>=2024.6.21.232706.dev0)"]
+asyncio = ["Pillow", "aiortc (>=1.14.0)", "jinja2", "msgpack (>=1.1.2)", "msgpack_numpy (>=0.4.8)", "mss (>=10.1.0)", "pyscreenshot (>=3.1)", "pyzmq (>=27.1.0)", "simplejpeg (>=1.9.0)", "starlette (>=0.50.0)", "uvicorn (>=0.38.0)", "yt-dlp[default] (>=2025.11.12.5349.dev0)"]
+core = ["Pillow", "mss (>=10.1.0)", "pyscreenshot (>=3.1)", "pyzmq (>=27.1.0)", "simplejpeg (>=1.9.0)", "yt-dlp[default] (>=2025.11.12.5349.dev0)"]
 
 [[package]]
 name = "wandb"
@@ -6604,4 +6607,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "8607e3052d1030deb04c74d9b9a42aaf542a3d32c465aa9284226819478d0913"
+content-hash = "05162e0962d118b4b44c243ac732904316c67b9d29a96f42dd63b21a600a6c1c"
