@@ -8,10 +8,10 @@ from pathlib import Path
 from tqdm import tqdm
 
 import spotlight_tools.file_format_versions as versions
-from spotlight_tools.calibration.aruco import (
-    ArUcoBoard,
-    detect_aruco,
-    plot_aruco_detections,
+from spotlight_tools.calibration.charuco import (
+    ChArUcoBoard,
+    detect_charuco,
+    plot_charuco_detections,
 )
 from spotlight_tools.calibration.model import (
     ransac_filter_outliers,
@@ -38,10 +38,10 @@ def open_tif_image_and_normalize(path: str) -> np.ndarray:
 
 
 def gather_calibration_points(
-    aruco_board: ArUcoBoard,
+    board: ChArUcoBoard,
     calibration_image_dir: Path,
     camera: str,
-    aruco_detection_viz_dir: Path | None = None,
+    charuco_detection_viz_dir: Path | None = None,
 ) -> pd.DataFrame:
     if not camera in ("behavior_camera", "muscle_camera"):
         raise ValueError(f"camera must be either 'behavior_camera' or 'muscle_camera'")
@@ -50,7 +50,7 @@ def gather_calibration_points(
 
     suffix = "tif" if camera == "muscle_camera" else "jpg"
     files = sorted(list(calibration_image_dir.glob(f"*.{suffix}")))
-    for path in tqdm(files, disable=None, desc="Detecting ArUco markers"):
+    for path in tqdm(files, disable=None, desc="Detecting Charuco markers"):
         _parts = path.stem.split("_")
         physical_x_mm = float(_parts[2].replace("x", ""))
         physical_y_mm = float(_parts[3].replace("y", ""))
@@ -58,29 +58,27 @@ def gather_calibration_points(
             image = open_tif_image_and_normalize(str(path))
         elif camera == "behavior_camera":
             image = open_jpg_image(str(path))
-        ids, corners = detect_aruco(image, camera, horizontal_flip=False)
-        if aruco_detection_viz_dir is not None:
+        ids, corners = detect_charuco(image, board, camera, horizontal_flip=False)
+        if charuco_detection_viz_dir is not None:
             fig, ax = plt.subplots()
-            plot_aruco_detections(fig, ax, image, ids, corners)
-            fig.savefig(aruco_detection_viz_dir / f"{path.stem}.png")
+            plot_charuco_detections(fig, ax, image, ids, corners)
+            fig.savefig(charuco_detection_viz_dir / f"{path.stem}.png")
             plt.close(fig)
         if ids is None:
             continue
-        for i, aruco_id in enumerate(ids):
-            physical_corners_pos = aruco_board.grid_id_to_corner_xy_mm(aruco_id)
-            for j in range(4):
-                data = {
-                    "aruco_id": aruco_id,
-                    "stage_x_mm": physical_x_mm,
-                    "stage_y_mm": physical_y_mm,
-                    "pixel_x_px": corners[i][j][0],
-                    "pixel_y_px": corners[i][j][1],
-                    "physical_x_mm": physical_corners_pos[j][0],
-                    "physical_y_mm": physical_corners_pos[j][1],
-                    "image_path": str(path),
-                    "corner_id": j,
-                }
-                all_data.append(data)
+        for i, corner_id in enumerate(ids):
+            phys_x, phys_y = board.corner_id_to_xy_mm(corner_id)
+            data = {
+                "corner_id": corner_id,
+                "stage_x_mm": physical_x_mm,
+                "stage_y_mm": physical_y_mm,
+                "pixel_x_px": corners[i][0][0],
+                "pixel_y_px": corners[i][0][1],
+                "physical_x_mm": phys_x,
+                "physical_y_mm": phys_y,
+                "image_path": str(path),
+            }
+            all_data.append(data)
 
     return pd.DataFrame(all_data)
 
@@ -102,12 +100,10 @@ def fit_calibration_model(
     muscle_camera: bool = False,
     arena_width: float = 48,
     arena_height: float = 72,
-    aruco_scale_mm: float = 0.3,
-    aruco_spacing_unitblk: int = 2,
-    visualize_aruco_detections: bool = False,
+    visualize_charuco_detections: bool = False,
 ) -> None:
     """
-    Fit the calibration model for the ArUco board.
+    Fit the calibration model for the Charuco board.
 
     Args:
         profile_dir (str):
@@ -118,12 +114,8 @@ def fit_calibration_model(
             Width of the arena in mm.
         arena_height (float):
             Height of the arena in mm.
-        aruco_scale_mm (float):
-            Size of each "pixel" (i.e. "block") of the ArUco markers in mm.
-        aruco_spacing_unitblk (int):
-            Spacing between each ArUco marker in "pixel" (i.e. "block").
-        visualize_aruco_detections (bool):
-            Whether to visualize the ArUco detections.
+        visualize_charuco_detections (bool):
+            Whether to visualize the Charuco detections.
     """
     print("Fitting calibration model for behavior camera...")
     fit_calibration_model_one_camera(
@@ -131,9 +123,7 @@ def fit_calibration_model(
         camera="behavior_camera",
         arena_width=arena_width,
         arena_height=arena_height,
-        aruco_scale_mm=aruco_scale_mm,
-        aruco_spacing_unitblk=aruco_spacing_unitblk,
-        visualize_aruco_detections=visualize_aruco_detections,
+        visualize_charuco_detections=visualize_charuco_detections,
     )
 
     if muscle_camera:
@@ -143,9 +133,7 @@ def fit_calibration_model(
             camera="muscle_camera",
             arena_width=arena_width,
             arena_height=arena_height,
-            aruco_scale_mm=aruco_scale_mm,
-            aruco_spacing_unitblk=aruco_spacing_unitblk,
-            visualize_aruco_detections=visualize_aruco_detections,
+            visualize_charuco_detections=visualize_charuco_detections,
         )
 
 
@@ -154,9 +142,7 @@ def fit_calibration_model_one_camera(
     camera: str = "behavior_camera",
     arena_width: float = 48,
     arena_height: float = 72,
-    aruco_scale_mm: float = 0.3,
-    aruco_spacing_unitblk: int = 2,
-    visualize_aruco_detections: bool = False,
+    visualize_charuco_detections: bool = False,
 ) -> None:
     # Expand the profile directory
     profile_dir = Path(profile_dir).expanduser()
@@ -176,27 +162,25 @@ def fit_calibration_model_one_camera(
             f"in the .{suffix} format."
         )
 
-    # Create the directory for visualizing ArUco detections if necessary
-    aruco_detection_viz_dir = (
-        Path(profile_dir) / f"calibration/aruco_scan_detection/{camera}"
+    # Create the directory for visualizing ChArUco detections if necessary
+    charuco_detection_viz_dir = (
+        Path(profile_dir) / f"calibration/charuco_scan_detection/{camera}"
     )
-    if visualize_aruco_detections:
-        aruco_detection_viz_dir.mkdir(exist_ok=True, parents=True)
+    if visualize_charuco_detections:
+        charuco_detection_viz_dir.mkdir(exist_ok=True, parents=True)
 
-    # Initialize the ArUco board
-    aruco_board = ArUcoBoard(
+    # Initialize the Charuco board
+    charuco_board = ChArUcoBoard(
         arena_dim_mm=(arena_width, arena_height),
-        scale_mm=aruco_scale_mm,
-        spacing_unitblk=aruco_spacing_unitblk,
     )
 
     # Gather calibration points
     coordinates_df = gather_calibration_points(
-        aruco_board,
+        charuco_board,
         calibration_image_dir,
         camera,
-        aruco_detection_viz_dir=(
-            aruco_detection_viz_dir if visualize_aruco_detections else None
+        charuco_detection_viz_dir=(
+            charuco_detection_viz_dir if visualize_charuco_detections else None
         ),
     )
     coordinates_df_path = (
