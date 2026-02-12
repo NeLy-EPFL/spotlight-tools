@@ -542,3 +542,172 @@ class BehaviorMuscleCrossMapper:
             "behavior_mapper_consistency": behavior_consistency,
             "muscle_mapper_consistency": muscle_consistency,
         }
+
+
+class HomographyMapper:
+    """
+    Maps between behavior and muscle camera coordinates using homography transformation.
+    
+    This class provides methods to convert pixel coordinates between the two cameras
+    using the homography matrix computed from ChArUco board calibration.
+    
+    Args:
+        homography_parameters (dict | str | Path): Homography parameters
+            as a dictionary, or a path to a YAML file containing the
+            homography data.
+    
+    Example:
+        >>> mapper = HomographyMapper("homography_result.yaml")
+        >>> muscle_coords = mapper.behavior_to_muscle(behavior_coords)
+        >>> behavior_coords = mapper.muscle_to_behavior(muscle_coords)
+    """
+    
+    _min_version_required = (1, 0, 0)  # Minimum version required in semver
+    
+    def __init__(self, homography_parameters: dict | str | Path):
+        if isinstance(homography_parameters, (str, Path)):
+            with open(homography_parameters, "r") as f:
+                homography_parameters = yaml.safe_load(f)
+            self._check_version_compatibility(homography_parameters)
+        
+        # Load homography matrices
+        self.H_beh2muscle = np.array(
+            homography_parameters["behavior_to_muscle"]["matrix"]
+        )
+        self.H_muscle2beh = np.array(
+            homography_parameters["muscle_to_behavior"]["matrix"]
+        )
+        
+        # Store metadata
+        self.metadata = homography_parameters.get("metadata", {})
+    
+    def _check_version_compatibility(self, parameters: dict):
+        """Check if the homography file version is compatible."""
+        if "metadata" not in parameters:
+            raise ValueError("Homography parameters missing 'metadata' field.")
+        
+        metadata = parameters["metadata"]
+        if "file_format_version" not in metadata:
+            raise ValueError("Homography metadata missing 'file_format_version' field.")
+        
+        version = metadata["file_format_version"]
+        major = version.get("major", 0)
+        minor = version.get("minor", 0)
+        patch = version.get("patch", 0)
+        
+        if (major, minor, patch) < self._min_version_required:
+            raise ValueError(
+                f"Homography file version {major}.{minor}.{patch} is not "
+                f"compatible. Minimum required version is "
+                f"{'.'.join(map(str, self._min_version_required))}."
+            )
+    
+    def behavior_to_muscle(
+        self, behavior_coords: np.ndarray
+    ) -> np.ndarray:
+        """
+        Transform coordinates from behavior camera to muscle camera.
+        
+        Args:
+            behavior_coords: Array of shape (N, 2) or (2,) containing (x, y) coordinates
+                in behavior camera pixel space
+        
+        Returns:
+            Array of same shape containing (x, y) coordinates in muscle camera pixel space
+        """
+        # Handle single point
+        single_point = False
+        if behavior_coords.ndim == 1:
+            behavior_coords = behavior_coords.reshape(1, -1)
+            single_point = True
+        
+        # Convert to homogeneous coordinates
+        ones = np.ones((behavior_coords.shape[0], 1))
+        behavior_homogeneous = np.hstack([behavior_coords, ones])
+        
+        # Apply homography
+        muscle_homogeneous = (self.H_beh2muscle @ behavior_homogeneous.T).T
+        
+        # Convert back to Cartesian coordinates
+        muscle_coords = muscle_homogeneous[:, :2] / muscle_homogeneous[:, 2:3]
+        
+        if single_point:
+            return muscle_coords.flatten()
+        return muscle_coords
+    
+    def muscle_to_behavior(
+        self, muscle_coords: np.ndarray
+    ) -> np.ndarray:
+        """
+        Transform coordinates from muscle camera to behavior camera.
+        
+        Args:
+            muscle_coords: Array of shape (N, 2) or (2,) containing (x, y) coordinates
+                in muscle camera pixel space
+        
+        Returns:
+            Array of same shape containing (x, y) coordinates in behavior camera pixel space
+        """
+        # Handle single point
+        single_point = False
+        if muscle_coords.ndim == 1:
+            muscle_coords = muscle_coords.reshape(1, -1)
+            single_point = True
+        
+        # Convert to homogeneous coordinates
+        ones = np.ones((muscle_coords.shape[0], 1))
+        muscle_homogeneous = np.hstack([muscle_coords, ones])
+        
+        # Apply homography
+        behavior_homogeneous = (self.H_muscle2beh @ muscle_homogeneous.T).T
+        
+        # Convert back to Cartesian coordinates
+        behavior_coords = behavior_homogeneous[:, :2] / behavior_homogeneous[:, 2:3]
+        
+        if single_point:
+            return behavior_coords.flatten()
+        return behavior_coords
+    
+    def warp_image_behavior_to_muscle(
+        self, 
+        behavior_image: np.ndarray,
+        output_shape: tuple[int, int],
+    ) -> np.ndarray:
+        """
+        Warp behavior camera image to muscle camera coordinate system.
+        
+        Args:
+            behavior_image: Behavior camera image
+            output_shape: Output image shape (height, width)
+        
+        Returns:
+            Warped image in muscle camera coordinate system
+        """
+        return cv2.warpPerspective(
+            behavior_image,
+            self.H_beh2muscle,
+            (output_shape[1], output_shape[0]),
+            flags=cv2.INTER_LINEAR,
+        )
+    
+    def warp_image_muscle_to_behavior(
+        self,
+        muscle_image: np.ndarray,
+        output_shape: tuple[int, int],
+    ) -> np.ndarray:
+        """
+        Warp muscle camera image to behavior camera coordinate system.
+        
+        Args:
+            muscle_image: Muscle camera image
+            output_shape: Output image shape (height, width)
+        
+        Returns:
+            Warped image in behavior camera coordinate system
+        """
+        return cv2.warpPerspective(
+            muscle_image,
+            self.H_muscle2beh,
+            (output_shape[1], output_shape[0]),
+            flags=cv2.INTER_LINEAR,
+        )

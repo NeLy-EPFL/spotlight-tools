@@ -6,6 +6,7 @@ import cv2
 import tyro
 from pathlib import Path
 from tqdm import tqdm
+from typing import Tuple
 
 import spotlight_tools.file_format_versions as versions
 from spotlight_tools.calibration.aruco import (
@@ -25,12 +26,11 @@ def open_jpg_image(path: str) -> np.ndarray:
     return image[:, :, 0]
 
 
-def open_tif_image_and_normalize(path: str) -> np.ndarray:
-    """Read 16-bit tif image and normalize to 0-255 range based on the 5th
-    and 95th percentiles."""
-    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
-    q20 = np.percentile(image, 20)
-    q80 = np.percentile(image, 80)
+def open_tif_image_and_normalize(path: str, percentiles: Tuple[float, float] = (20, 80)) -> np.ndarray:
+    """Read 16-bit tif image and normalize to 0-255 based on the given percentiles."""
+    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED).astype(float)
+    q20 = np.percentile(image, percentiles[0])
+    q80 = np.percentile(image, percentiles[1])
     image = (image - q20) / (q80 - q20)
     image = np.clip(image, 0, 1)
     image = (image * 255).astype(np.uint8)

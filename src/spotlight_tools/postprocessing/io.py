@@ -12,7 +12,7 @@ def find_files_per_frame_by_suffix(
     consecutive at the specified stride (ie. no frame is missing).
     """
     logger = logging.getLogger(__name__)
-
+    print(frames_dir, suffix)
     files = list(frames_dir.glob(f"*{suffix}"))
     files_by_frame = {}
     for file in files:
@@ -22,7 +22,6 @@ def find_files_per_frame_by_suffix(
         except ValueError:
             logger.warning(f"Could not recognize file name '{file}'. Skipping file.")
     sorted_files_by_frame = dict(sorted(files_by_frame.items()))
-
     last_frame_id = list(sorted_files_by_frame.keys())[-1]
     for frame_id in range(0, last_frame_id + stride, stride):
         if frame_id not in sorted_files_by_frame.keys():
