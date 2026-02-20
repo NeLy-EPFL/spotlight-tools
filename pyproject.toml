@@ -6,7 +6,7 @@ authors = [
     {name = "Sibo Wang-Chen", email = "sibo.wang@epfl.ch"}
 ]
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "opencv-python (>=4.11,<5.0)",
     "svgwrite (==1.4.3)",
