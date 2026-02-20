@@ -477,8 +477,10 @@ def _save_transformation_metadata(
 #     )
 
 #     # fmt: off
-#     recording_dir = Path("/home/sibwang/Data/spotlight/20250613-fly1b-002/")
-#     sleap_model_dir = Path("/home/sibwang/Data/sleap/models/spotlight_3pt_20251023/models/251024_023711.single_instance.n=900/")
+#     recording_dir = Path("~/data/spotlight/20250613-fly1b-002/").expanduser()
+#     sleap_model_dir = Path(
+#         "~/data/sleap/models/spotlight_3pt_20251023/models/251024_023711.single_instance.n=900/"
+#     ).expanduser()
 #     pseudo3ch_frame_paths = sorted(recording_dir.glob("behavior_images/behavior_frame_*.jpg"))
 #     config = load_spotlight_tools_config()
 #     decode_and_transform_behavior_frames(

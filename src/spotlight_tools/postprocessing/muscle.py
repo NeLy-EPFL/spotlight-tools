@@ -429,7 +429,7 @@ def match_behavior_frameid_to_muscle_frameid(
 #     )
 
 #     # fmt: off
-#     recording_dir = Path("/home/sibwang/Data/spotlight/20250613-fly1b-002/")
+#     recording_dir = Path("~/data/spotlight/20250613-fly1b-002/").expanduser()
 #     map_muscle_frames_to_behavior(
 #         muscle_calibration_path=recording_dir / "metadata/calibration_parameters_muscle.yaml",
 #         behavior_calibration_path=recording_dir / "metadata/calibration_parameters_behavior.yaml",
