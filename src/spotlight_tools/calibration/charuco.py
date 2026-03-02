@@ -10,8 +10,8 @@ class CharucoBoard:
         self,
         squares_x: int = 7,
         squares_y: int = 6,
-        square_length: float = 300,
-        marker_length: float = 225,
+        square_length: float = 0.0005,
+        marker_length: float = 0.000375, 
         aruco_dict: int = cv2.aruco.DICT_4X4_250,
         h_flip: bool = True,
     ):
