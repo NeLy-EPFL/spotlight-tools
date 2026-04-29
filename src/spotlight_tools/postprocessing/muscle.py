@@ -168,7 +168,7 @@ def warp_all_muscle_frames_to_behavior(
 
 def get_behavior_muscle_sync_ratio(
     *,
-    dual_recording_timing_metadata_path: Path | str | None,
+    dual_recording_timing_metadata_path: Path | str | None = None,
     recording_dir: Path | str | None = None,
 ) -> int:
     """Extract behavior-to-muscle frame synchronization ratio from timing metadata."""
