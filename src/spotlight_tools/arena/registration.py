@@ -37,6 +37,8 @@ from sklearn.linear_model import LinearRegression, RANSACRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
 
+from spotlight_tools import file_format_versions as _versions
+
 # AprilTag family used when generating the arena registration board.
 APRILTAG_FAMILY = "tag16h5"
 
@@ -404,6 +406,13 @@ def _to_yaml_blocks(
         "bias",
     ]
     return {
+        "metadata": {
+            "file_format_version": {
+                "major": _versions.calibration_result_major,
+                "minor": _versions.calibration_result_minor,
+                "patch": _versions.calibration_result_patch,
+            }
+        },
         "stage_and_pixel_to_physical": {
             "physical_pos_x": row(mat_pixel_to_phys[0], px2phys_keys),
             "physical_pos_y": row(mat_pixel_to_phys[1], px2phys_keys),

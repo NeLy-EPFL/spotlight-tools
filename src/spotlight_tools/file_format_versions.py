@@ -6,11 +6,11 @@ consistent with recorder/src/common/fileFormatVersions.hpp
 import logging
 
 
-recorder_config_major = 1
+recorder_config_major = 2
 recorder_config_minor = 0
 recorder_config_patch = 0
 
-calibration_result_major = 1
+calibration_result_major = 2
 calibration_result_minor = 0
 calibration_result_patch = 0
 
