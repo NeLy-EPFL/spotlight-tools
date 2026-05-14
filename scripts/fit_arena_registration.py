@@ -14,13 +14,15 @@ Outputs (under `<arena_dir>/model/`):
     - detections/...             per-image detection overlays (optional)
 """
 
+from typing import Annotated
+
 import tyro
 
 from spotlight_tools.arena import APRILTAG_FAMILY, fit_arena_registration
 
 
 def fit_arena_registration_cli(
-    arena_dir: str,
+    arena_dir: Annotated[str, tyro.conf.arg(aliases=["-a"])],
     apriltag_family: str = APRILTAG_FAMILY,
     min_decision_margin: float = 20.0,
     mad_threshold: float = 3.0,
