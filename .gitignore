@@ -5,6 +5,7 @@ wandb/
 *.jpg
 *.pth
 *.png
+!active_area.png
 *.ipynb
 temp/
 batch_scripts/

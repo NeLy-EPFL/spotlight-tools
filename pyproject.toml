@@ -9,7 +9,11 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "opencv-python (>=4.11,<5.0)",
-    "svgwrite (==1.4.3)",
+    "pupil-apriltags (>=1.0,<2.0)",
+    "pylibdmtx (==0.1.10)",
+    "pymupdf (>=1.0,<2.0)",
+    "mmh3 (>=5.0,<6.0)",
+    "pillow (>=11.0,<12.0)",
     "numpy (>=2.0,<3.0)",
     "tqdm (>=4.67,<5.0)",
     "ipython (>=9.0,<10.0)",
@@ -34,14 +38,19 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "spotlight_tools", from = "src"}]
+packages = [
+    {include = "spotlight_tools", from = "src"},
+    {include = "scripts"},
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-generate-calibration-board = "spotlight_tools.scripts.generate_board:main"
-fit-calibration-model = "spotlight_tools.scripts.fit_calibration:main"
-postprocess-recording = "spotlight_tools.scripts.postprocess_recording:main"
-visualize-stage-trajectory = "spotlight_tools.scripts.visualize_stage_trajectory:main"
+fit-calibration-model = "scripts.fit_calibration:main"
+postprocess-recording = "scripts.postprocess_recording:main"
+visualize-stage-trajectory = "scripts.visualize_stage_trajectory:main"
+
+[tool.setuptools.package-data]
+spotlight_tools = ["assets/**"]
