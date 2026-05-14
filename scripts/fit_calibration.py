@@ -9,7 +9,7 @@ from tqdm import tqdm
 from typing import Tuple
 
 import spotlight_tools.file_format_versions as versions
-from spotlight_tools.calibration.aruco import (
+from spotlight_tools.calibration.apriltag import (
     ArUcoBoard,
     detect_aruco,
     plot_aruco_detections,
