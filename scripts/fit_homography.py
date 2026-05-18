@@ -7,7 +7,6 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 
-import spotlight_tools.file_format_versions as versions
 from spotlight_tools.calibration.charuco import get_gizem_board
 from spotlight_tools.scripts.fit_calibration import (
     open_jpg_image,
@@ -905,11 +904,6 @@ def fit_homography(
     # Save results to YAML
     homography_results = {
         "metadata": {
-            "file_format_version": {
-                "major": versions.calibration_result_major,
-                "minor": versions.calibration_result_minor,
-                "patch": versions.calibration_result_patch,
-            },
             "description": "Homography transformation between behavior and muscle cameras",
             "num_stage_positions": len([k for k in matching_data.keys() if k != "_rejection_stats"]),
             "num_total_frames": sum(data["num_frames"] for k, data in matching_data.items() if k != "_rejection_stats"),

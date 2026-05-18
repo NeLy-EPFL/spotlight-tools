@@ -8,7 +8,6 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import Tuple
 
-import spotlight_tools.file_format_versions as versions
 from spotlight_tools.calibration.apriltag import (
     ArUcoBoard,
     detect_aruco,
@@ -222,15 +221,6 @@ def fit_calibration_model_one_camera(
     mat_physical_to_pixel = A_to_B(mat_pixel_to_physical)
 
     calibration_results = {
-        "metadata": {
-            # Assign a version number to the format of this calibration file
-            # Follow semver for backward compatibility detection
-            "file_format_version": {
-                "major": versions.calibration_result_major,
-                "minor": versions.calibration_result_minor,
-                "patch": versions.calibration_result_patch,
-            }
-        },
         "stage_and_pixel_to_physical": {
             "physical_pos_x": {
                 "stage_pos_x": float(mat_pixel_to_physical[0, 0]),

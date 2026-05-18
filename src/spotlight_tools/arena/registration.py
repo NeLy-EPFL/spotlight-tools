@@ -18,9 +18,8 @@ is fitted via RANSAC, after per-apriltag outlier rejection using the
 fact that we have 10 repeated measurements for the same stage pose.
 
 The fit is saved to `<arena_dir>/model/calibration_result.yaml` in the
-same schema as the legacy `calibration/model/behavior_camera/...` output,
-minus the (now-ignored) file_format_version block. Per-corner inputs are
-saved alongside as `calibration_points.csv`.
+same schema as the legacy `calibration/model/behavior_camera/...` output.
+Per-corner inputs are saved alongside as `calibration_points.csv`.
 """
 
 from __future__ import annotations
@@ -36,8 +35,6 @@ from pupil_apriltags import Detector
 from sklearn.linear_model import LinearRegression, RANSACRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
-
-from spotlight_tools import file_format_versions as _versions
 
 # AprilTag family used when generating the arena registration board.
 APRILTAG_FAMILY = "tag16h5"
@@ -406,13 +403,6 @@ def _to_yaml_blocks(
         "bias",
     ]
     return {
-        "metadata": {
-            "file_format_version": {
-                "major": _versions.calibration_result_major,
-                "minor": _versions.calibration_result_minor,
-                "patch": _versions.calibration_result_patch,
-            }
-        },
         "stage_and_pixel_to_physical": {
             "physical_pos_x": row(mat_pixel_to_phys[0], px2phys_keys),
             "physical_pos_y": row(mat_pixel_to_phys[1], px2phys_keys),

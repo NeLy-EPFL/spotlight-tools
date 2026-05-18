@@ -16,18 +16,12 @@ class SpotlightPositionMapper:
         (`stage_and_pixel_to_physical`)
 
     The mapping is parameterized by calibration data, which can be provided
-    as a dictionary or as a path to a YAML calibration file. The
-    calibration file must contain version metadata and the required mapping
-    coefficients.
+    as a dictionary or as a path to a YAML calibration file.
 
     Args:
         calibration_parameters (dict | str | Path): Calibration parameters
             as a dictionary, or a path to a YAML file containing the
             calibration data.
-
-    Raises:
-        ValueError: If the calibration file version is incompatible or
-            required metadata is missing.
 
     Example:
         >>> mapper = SpotlightPositionMapper("calibration.yaml")
@@ -35,13 +29,10 @@ class SpotlightPositionMapper:
         >>> physical_coords = mapper.stage_and_pixel_to_physical(stage_pos, pixel_coords)
     """
 
-    _min_version_required = (1, 0, 0)  # Minimum version required in semver
-
     def __init__(self, calibration_parameters: dict | str | Path):
         if isinstance(calibration_parameters, (str, Path)):
             with open(calibration_parameters, "r") as f:
                 calibration_parameters = yaml.safe_load(f)
-            self._check_version_compatibility(calibration_parameters)
 
         # Stage and physical to pixel mapping
         _weights_stage_and_physical_to_pixel_names = [
@@ -163,33 +154,6 @@ class SpotlightPositionMapper:
             (physical_pos_x[:, np.newaxis], physical_pos_y[:, np.newaxis])
         )
         return physical_pos.reshape(stage_pos.shape)
-
-    def _check_version_compatibility(self, calibration_parameters: dict):
-        """
-        Check if the calibration file version is compatible with this mapper.
-
-        Args:
-            calibration_parameters: The loaded calibration parameters dictionary
-
-        Raises:
-            ValueError: If version is incompatible or format is incorrect
-        """
-        try:
-            version_dict = calibration_parameters["metadata"]["file_format_version"]
-            version_tuple = (
-                version_dict["major"],
-                version_dict["minor"],
-                version_dict["patch"],
-            )
-            if version_tuple < self._min_version_required:
-                raise ValueError(
-                    f"Calibration file version {version_tuple} is less than the "
-                    f"minimum required version {self._min_version_required}"
-                )
-        except KeyError:
-            raise ValueError(
-                "Calibration file does not contain 'file_format_version' metadata"
-            )
 
 
 class BehaviorMuscleCrossMapper:
@@ -561,15 +525,12 @@ class HomographyMapper:
         >>> muscle_coords = mapper.behavior_to_muscle(behavior_coords)
         >>> behavior_coords = mapper.muscle_to_behavior(muscle_coords)
     """
-    
-    _min_version_required = (1, 0, 0)  # Minimum version required in semver
-    
+
     def __init__(self, homography_parameters: dict | str | Path):
         if isinstance(homography_parameters, (str, Path)):
             with open(homography_parameters, "r") as f:
                 homography_parameters = yaml.safe_load(f)
-            self._check_version_compatibility(homography_parameters)
-        
+
         # Load homography matrices
         self.H_beh2muscle = np.array(
             homography_parameters["behavior_to_muscle"]["matrix"]
@@ -577,31 +538,10 @@ class HomographyMapper:
         self.H_muscle2beh = np.array(
             homography_parameters["muscle_to_behavior"]["matrix"]
         )
-        
+
         # Store metadata
         self.metadata = homography_parameters.get("metadata", {})
-    
-    def _check_version_compatibility(self, parameters: dict):
-        """Check if the homography file version is compatible."""
-        if "metadata" not in parameters:
-            raise ValueError("Homography parameters missing 'metadata' field.")
-        
-        metadata = parameters["metadata"]
-        if "file_format_version" not in metadata:
-            raise ValueError("Homography metadata missing 'file_format_version' field.")
-        
-        version = metadata["file_format_version"]
-        major = version.get("major", 0)
-        minor = version.get("minor", 0)
-        patch = version.get("patch", 0)
-        
-        if (major, minor, patch) < self._min_version_required:
-            raise ValueError(
-                f"Homography file version {major}.{minor}.{patch} is not "
-                f"compatible. Minimum required version is "
-                f"{'.'.join(map(str, self._min_version_required))}."
-            )
-    
+
     def behavior_to_muscle(
         self, behavior_coords: np.ndarray
     ) -> np.ndarray:
