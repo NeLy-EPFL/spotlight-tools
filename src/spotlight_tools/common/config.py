@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def load_spotlight_tools_config() -> dict:
-    assets_dir = files("spotlight_tools", "assets")
+    assets_dir = files("spotlight_tools") / "assets"
     config_path = assets_dir / "model_config.yaml"
     if not config_path.exists():
         raise FileNotFoundError(
