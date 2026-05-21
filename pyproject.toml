@@ -33,6 +33,7 @@ dependencies = [
 
 [tool.poetry]
 packages = [{include = "spotlight_tools", from = "src"}]
+include = ["src/spotlight_tools/assets/**"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
