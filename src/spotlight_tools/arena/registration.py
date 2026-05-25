@@ -4,10 +4,9 @@ physical (arena) pos from a registration scan captured by
 `run-arena-registration-scan`.
 
 The scan produces, under `<arena_dir>/mapping_scan/`:
-  - `apriltag<id>_img<i>.jpg` (10 images per apriltag, rotated 90 deg CCW from
-    the raw sensor, not horizontally flipped -- so the AprilTags appear
-    mirrored relative to their design orientation because the arena is
-    mounted face-down)
+  - `apriltag<id>_img<i>.jpg` (10 images per apriltag, processed with
+    reorientBehaviorImage: rotated 90 deg CCW then horizontally flipped,
+    matching the live-preview orientation)
   - `apriltag_stage_positions.csv` with stage (x, y) per image
 
 Combined with `<arena_dir>/metadata.yaml` (which holds the arena-space
@@ -42,10 +41,9 @@ APRILTAG_FAMILY = "tag16h5"
 # Corner index returned by the AprilTag detector -> key in metadata.yaml
 # apriltag_positions[<id>]. pupil_apriltags reports corners
 # counter-clockwise starting from the marker's design bottom-left when the
-# marker is viewed in its design orientation. The actual indexing depends
-# on the relative orientation of the image; empirically for the
-# rotated-only registration-scan images the ordering matches the listed
-# keys (see `_CORNER_KEYS_BY_TURN`).
+# marker is viewed in its design orientation. Detection runs on the
+# horizontally un-flipped (rotate-only) image so the ordering is the same
+# as it was before the horizontal-flip convention was adopted.
 _CORNER_KEYS = ["bottomleft", "bottomright", "topright", "topleft"]
 
 
@@ -56,19 +54,21 @@ _CORNER_KEYS = ["bottomleft", "bottomright", "topright", "topleft"]
 
 # pupil_apriltags has had reports of double-free / malloc errors when many
 # Detector instances are created in the same process. Cache one per family.
-_DETECTOR_CACHE: dict[str, Detector] = {}
+_DETECTOR_CACHE: dict[tuple[str, float], Detector] = {}
 
 
-def _get_detector(family: str) -> Detector:
-    if family not in _DETECTOR_CACHE:
-        _DETECTOR_CACHE[family] = Detector(families=family)
-    return _DETECTOR_CACHE[family]
+def _get_detector(family: str, quad_decimate: float = 4.0) -> Detector:
+    key = (family, quad_decimate)
+    if key not in _DETECTOR_CACHE:
+        _DETECTOR_CACHE[key] = Detector(families=family, quad_decimate=quad_decimate)
+    return _DETECTOR_CACHE[key]
 
 
 def detect_apriltags(
     image: np.ndarray,
     family: str = APRILTAG_FAMILY,
     min_decision_margin: float = 20.0,
+    quad_decimate: float = 4.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Detect AprilTags in a grayscale image.
@@ -98,7 +98,7 @@ def detect_apriltags(
         margins: shape (n,) float array of decision margins (useful for
             debugging / further filtering).
     """
-    detector = _get_detector(family)
+    detector = _get_detector(family, quad_decimate)
     detections = detector.detect(image)
     kept = [d for d in detections if d.decision_margin >= min_decision_margin]
 
@@ -121,12 +121,25 @@ def _draw_detection(
 ) -> np.ndarray:
     """Render an annotated BGR copy of the image for diagnostics."""
     annotated = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    _CORNER_LABELS = ["BL", "BR", "TR", "TL"]
     for tag_id, c in zip(ids, corners):
         poly = c.astype(int).reshape(-1, 1, 2)
-        cv2.polylines(annotated, [poly], isClosed=True, color=(0, 255, 255), thickness=2)
+        cv2.polylines(
+            annotated, [poly], isClosed=True, color=(0, 255, 255), thickness=2
+        )
         for j, (x, y) in enumerate(c):
-            color = [(255, 0, 255), (0, 165, 255), (255, 0, 0), (255, 255, 0)][j]
+            color = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)][j]
             cv2.circle(annotated, (int(x), int(y)), 6, color, -1)
+            cv2.putText(
+                img=annotated,
+                text=_CORNER_LABELS[j],
+                org=(int(x) + 8, int(y) + 5),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1,
+                color=color,
+                thickness=2,
+                lineType=cv2.LINE_AA,
+            )
         cx, cy = c.mean(axis=0).astype(int)
         cv2.putText(
             annotated,
@@ -150,6 +163,7 @@ def gather_apriltag_points(
     arena_dir: Path,
     family: str = APRILTAG_FAMILY,
     min_decision_margin: float = 20.0,
+    quad_decimate: float = 4.0,
     viz_dir: Path | None = None,
 ) -> pd.DataFrame:
     """
@@ -192,13 +206,21 @@ def gather_apriltag_points(
             missing_detections.append((tag_id, img_id))
             continue
 
+        # Images are saved after reorientBehaviorImage (rotate 90° CCW +
+        # horizontal flip). Un-flip for detection so tags are not mirrored
+        # (pupil_apriltags does not reliably detect mirrored tags).
+        image_for_detection = cv2.flip(image, 1)
         ids, corners_all, _margins = detect_apriltags(
-            image, family=family, min_decision_margin=min_decision_margin
+            image_for_detection,
+            family=family,
+            min_decision_margin=min_decision_margin,
+            quad_decimate=quad_decimate,
         )
         if viz_dir is not None:
+            annotated = _draw_detection(image_for_detection, ids, corners_all)
             cv2.imwrite(
                 str(viz_dir / f"apriltag{tag_id}_img{img_id}.jpg"),
-                _draw_detection(image, ids, corners_all),
+                cv2.flip(annotated, 1),
             )
 
         # Discard every detection whose id does not match the one
@@ -219,8 +241,12 @@ def gather_apriltag_points(
             )
         meta = apriltag_positions[tag_id]
 
+        image_width = image.shape[1]
         for j, key in enumerate(_CORNER_KEYS):
             phys_x, phys_y = meta[key]
+            # corners[j, 0] is in the un-flipped (detect) coordinate frame;
+            # flip x back to the display coordinate frame (rotate+flip image).
+            pixel_x = image_width - 1 - corners[j, 0]
             rows.append(
                 {
                     "apriltag_id": tag_id,
@@ -228,7 +254,7 @@ def gather_apriltag_points(
                     "corner_id": j,
                     "stage_x_mm": float(r["stage_x_mm"]),
                     "stage_y_mm": float(r["stage_y_mm"]),
-                    "pixel_x_px": float(corners[j, 0]),
+                    "pixel_x_px": float(pixel_x),
                     "pixel_y_px": float(corners[j, 1]),
                     "physical_x_mm": float(phys_x),
                     "physical_y_mm": float(phys_y),
@@ -344,14 +370,14 @@ def fit_ransac_model(
     pred_y = lr_y.predict(X_in)
     res_x = y_x[inlier_mask] - pred_x
     res_y = y_y[inlier_mask] - pred_y
-    res_euclidean = np.sqrt(res_x ** 2 + res_y ** 2)
+    res_euclidean = np.sqrt(res_x**2 + res_y**2)
     metrics = {
         "n_total": int(len(df)),
         "n_inliers": int(inlier_mask.sum()),
         "n_outliers": int((~inlier_mask).sum()),
         "rmse_x_mm": float(np.sqrt(mean_squared_error(y_x[inlier_mask], pred_x))),
         "rmse_y_mm": float(np.sqrt(mean_squared_error(y_y[inlier_mask], pred_y))),
-        "rmse_euclidean_mm": float(np.sqrt(np.mean(res_euclidean ** 2))),
+        "rmse_euclidean_mm": float(np.sqrt(np.mean(res_euclidean**2))),
         "max_residual_mm": float(res_euclidean.max()),
         "r2_x": float(r2_score(y_x[inlier_mask], pred_x)),
         "r2_y": float(r2_score(y_y[inlier_mask], pred_y)),
@@ -484,9 +510,7 @@ def save_diagnostic_plots(
 
     # Spatial map of inliers / outliers in physical space
     ax = axes[1, 1]
-    ax.scatter(
-        y_x[inlier], y_y[inlier], c="C0", s=14, alpha=0.6, label="inlier"
-    )
+    ax.scatter(y_x[inlier], y_y[inlier], c="C0", s=14, alpha=0.6, label="inlier")
     ax.scatter(
         y_x[~inlier],
         y_y[~inlier],
@@ -529,6 +553,7 @@ def fit_arena_registration(
     arena_dir: str | Path,
     family: str = APRILTAG_FAMILY,
     min_decision_margin: float = 20.0,
+    quad_decimate: float = 4.0,
     mad_threshold: float = 3.0,
     ransac_residual_threshold: float = 0.5,
     ransac_max_trials: int = 1000,
@@ -545,6 +570,9 @@ def fit_arena_registration(
         min_decision_margin: drop AprilTag detections with decision
             margin below this value (suppresses noise-driven false
             positives from `tag16h5`).
+        quad_decimate: decimation factor for the AprilTag quad detector.
+            Lower values (e.g. 1.0) improve detection at small tag sizes
+            at the cost of speed; higher values (e.g. 4.0) are faster.
         mad_threshold: per-tag burst-level rejection threshold.
         ransac_residual_threshold: RANSAC inlier threshold (mm).
         ransac_max_trials: RANSAC iterations.
@@ -562,6 +590,7 @@ def fit_arena_registration(
         arena_dir,
         family=family,
         min_decision_margin=min_decision_margin,
+        quad_decimate=quad_decimate,
         viz_dir=viz_dir,
     )
     if len(df_raw) == 0:

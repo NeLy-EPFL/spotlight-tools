@@ -250,17 +250,24 @@ class ArenaConfig:
 
     def _rasterize_active_area(self) -> np.ndarray:
         """
-        Reconstruct page with only black shapes, rasterize, then crop to the
-        bounding box of actual black pixels.
+        Reconstruct page with only black shapes and rasterize at full page size.
+
+        The returned array has dimensions (arenaHeight/R) x (arenaWidth/R) so
+        that pixel (col, row) corresponds exactly to physical position
+        (col * R, row * R) in mm. This 1-to-1 alignment is required by the
+        C++ ActiveAreaMask warp, which indexes the PNG as mask_col = physical_x/R.
+        Do NOT crop this image — any crop would shift the pixel-to-physical
+        mapping and misplace the mask overlay.
 
         Returns:
-            arr -- 2D uint8 numpy array (0 = white, 255 = black)
+            arr -- 2D uint8 numpy array; 0 = black (walls), 255 = white (accessible)
         """
         black_paths = self._drawings_by_color(COLOR_ACTIVE_AREA)
 
+        w_px = int(round(self.arena_dim[0] / self.raster_resolution_mm))
+        h_px = int(round(self.arena_dim[1] / self.raster_resolution_mm))
+
         if not black_paths:
-            w_px = int(round(self.arena_dim[0] / self.raster_resolution_mm))
-            h_px = int(round(self.arena_dim[1] / self.raster_resolution_mm))
             return np.full((h_px, w_px), 255, dtype=np.uint8)
 
         # Replay only black paths onto a fresh page
@@ -290,26 +297,33 @@ class ArenaConfig:
         )
         arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
         tmp_doc.close()
-
-        # Crop to actual black pixels
-        black = arr < 128
-        rows = np.any(black, axis=1)
-        cols = np.any(black, axis=0)
-
-        if not rows.any():
-            return np.full_like(arr, 255)
-
-        row0, row1 = np.where(rows)[0][[0, -1]]
-        col0, col1 = np.where(cols)[0][[0, -1]]
-
-        return arr[row0 : row1 + 1, col0 : col1 + 1]
+        return arr
 
     # -------------------------------------------------------------------------
 
     @property
     def checksum_str(self) -> str:
-        """MurmurHash3 (32-bit) of the raw PDF file bytes as an 8-char hex string."""
-        cksum_uint32 = mmh3.hash(self.pdf_path.read_bytes(), signed=False)
+        _corners = ["topleft", "topright", "bottomleft", "bottomright"]
+
+        positions = []
+        # Arena dimensions
+        positions += list(self.arena_dim)
+        # DataMatrix position
+        for corner in _corners:
+            positions += list(self.datamatrix_pos[corner])
+        # AprilTag positions (sorted by tag ID)
+        for pos in self.apriltag_pos_list:
+            for corner in _corners:
+                positions += list(pos[corner])
+        arr_pos = np.array(positions, dtype=np.float32)
+        arr_pos = (arr_pos * 1000).round().astype(np.uint32)  # avoid float issues
+
+        # Rasterized active area (hash of the PNG bytes)
+        arr_raster = self._rasterize_active_area().astype(bool).flatten()
+
+        # Compute 32-bit checksum of all data as hex string
+        arr = np.concatenate([arr_pos, arr_raster.view(np.uint32)])
+        cksum_uint32 = mmh3.hash(arr.tobytes(), signed=False)
         return f"{cksum_uint32:08x}"
 
     # -------------------------------------------------------------------------
@@ -322,7 +336,11 @@ class ArenaConfig:
         )
         img = np.zeros((size_px, size_px), dtype=np.uint8)
         cv2.aruco.generateImageMarker(d, tag_id, size_px, img, borderBits=1)
-        return img
+        # cv2.aruco renders AprilTag markers 180° rotated relative to the
+        # reference AprilTag library used by pupil_apriltags. Rotating here
+        # ensures the printed tag's design orientation matches pupil_apriltags'
+        # corner ordering, so _CORNER_KEYS in registration.py is correct.
+        return np.rot90(img, 2)
 
     @staticmethod
     def _make_datamatrix_array(data: str, size_px: int) -> np.ndarray:

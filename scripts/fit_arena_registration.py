@@ -14,6 +14,7 @@ Outputs (under `<arena_dir>/model/`):
     - detections/...             per-image detection overlays (optional)
 """
 
+import os
 from typing import Annotated
 
 import tyro
@@ -25,6 +26,7 @@ def fit_arena_registration_cli(
     arena_dir: Annotated[str, tyro.conf.arg(aliases=["-a"])],
     apriltag_family: str = APRILTAG_FAMILY,
     min_decision_margin: float = 20.0,
+    quad_decimate: float = 4.0,
     mad_threshold: float = 3.0,
     ransac_residual_threshold: float = 0.5,
     ransac_max_trials: int = 1000,
@@ -42,6 +44,9 @@ def fit_arena_registration_cli(
             decision_margin below this value. tag16h5 has a high false-
             positive rate; valid registration-scan detections sit at
             tens to hundreds while noise is typically below ~5.
+        quad_decimate: Decimation factor for the AprilTag quad detector.
+            Lower values (e.g. 1.0) improve detection at small tag sizes
+            at the cost of speed; higher values (e.g. 4.0) are faster.
         mad_threshold: Per-burst outlier cutoff for corner detections.
             For each (apriltag_id, corner_id), the 10 frames yield 10
             pixel positions that should be nearly identical (the stage
@@ -62,6 +67,7 @@ def fit_arena_registration_cli(
         arena_dir=arena_dir,
         family=apriltag_family,
         min_decision_margin=min_decision_margin,
+        quad_decimate=quad_decimate,
         mad_threshold=mad_threshold,
         ransac_residual_threshold=ransac_residual_threshold,
         ransac_max_trials=ransac_max_trials,
@@ -71,6 +77,9 @@ def fit_arena_registration_cli(
 
 def main() -> None:
     tyro.cli(fit_arena_registration_cli)
+    # pupil_apriltags has a double-free in its C destructor; skip Python
+    # teardown to avoid a crash on exit. All output has been flushed by here.
+    os._exit(0)
 
 
 if __name__ == "__main__":
