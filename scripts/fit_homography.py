@@ -8,9 +8,18 @@ import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 
 from spotlight_tools.calibration.charuco import get_gizem_board
-from spotlight_tools.scripts.fit_calibration import (
-    open_tif_image_and_normalize,
-)
+
+
+def open_tif_image_and_normalize(path: str) -> np.ndarray:
+    """Read 16-bit tif image and normalize to 0-255 range based on the 5th
+    and 95th percentiles."""
+    image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    q20 = np.percentile(image, 20)
+    q80 = np.percentile(image, 80)
+    image = (image - q20) / (q80 - q20)
+    image = np.clip(image, 0, 1)
+    image = (image * 255).astype(np.uint8)
+    return image
 
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
@@ -216,12 +225,16 @@ def visualize_exclusion_zone(
             # Set limits
             max_offset = max(
                 noise_threshold_px * 2,
-                np.max(np.abs(offsets_x))
-                if len(offsets_x) > 0
-                else noise_threshold_px * 2,
-                np.max(np.abs(offsets_y))
-                if len(offsets_y) > 0
-                else noise_threshold_px * 2,
+                (
+                    np.max(np.abs(offsets_x))
+                    if len(offsets_x) > 0
+                    else noise_threshold_px * 2
+                ),
+                (
+                    np.max(np.abs(offsets_y))
+                    if len(offsets_y) > 0
+                    else noise_threshold_px * 2
+                ),
             )
             ax.set_xlim(-max_offset, max_offset)
             ax.set_ylim(-max_offset, max_offset)
