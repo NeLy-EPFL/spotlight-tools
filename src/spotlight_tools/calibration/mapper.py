@@ -220,7 +220,7 @@ class BehaviorMuscleCrossMapper:
             raise ValueError("stage_pos must have the last dimension of size 2")
 
         # Extract transformation weights
-        # Transformation A: pixels_A → physical
+        # Transformation A: pixels_A -> physical
         # [physical_x]   [ ... W_A_st_px_to_phys_x ... ]   [stage_x  ]
         # [physical_y] = [ ... W_A_st_px_to_phys_y ... ] x [stage_y  ]
         #                                                  [pixel_a_x]
@@ -233,7 +233,7 @@ class BehaviorMuscleCrossMapper:
             ]
         )  # Shape: (2, 5)
 
-        # Transformation B: stage + physical → pixels_B
+        # Transformation B: stage + physical -> pixels_B
         # [pixel_b_x]   [ ... W_B_st_phys_to_px_x ... ]   [stage_x   ]
         # [pixel_b_y] = [ ... W_B_st_phys_to_px_y ... ] x [stage_y   ]
         #                                                 [physical_x]
@@ -269,10 +269,10 @@ class BehaviorMuscleCrossMapper:
 
         # Offset part: further split into
         # i.  How changes in pixel stage position's contribution to physical xy affect
-        #     B pixel xy via the physical → pixel transformation in B, PLUS the direct
+        #     B pixel xy via the physical -> pixel transformation in B, PLUS the direct
         #     contribution from stage position in B
         # ii. How the effect of the bias term in A on physical xy then contributes to
-        #     B pixel xy via the physical → pixel transformation in B
+        #     B pixel xy via the physical -> pixel transformation in B
         # Each of these is a (2, 1) vector
         stage_pos_vert = stage_pos.reshape(2, 1)
         stage_contribution = (W_b_stage + W_b_physical @ W_a_stage) @ stage_pos_vert

@@ -1,3 +1,5 @@
+"""Config loader for the spotlight-tools package (config/config.yaml)."""
+
 import yaml
 
 import spotlight_tools

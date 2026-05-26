@@ -206,7 +206,7 @@ def gather_apriltag_points(
             missing_detections.append((tag_id, img_id))
             continue
 
-        # Images are saved after reorientBehaviorImage (rotate 90° CCW +
+        # Images are saved after reorientBehaviorImage (rotate 90deg CCW +
         # horizontal flip). Un-flip for detection so tags are not mirrored
         # (pupil_apriltags does not reliably detect mirrored tags).
         image_for_detection = cv2.flip(image, 1)

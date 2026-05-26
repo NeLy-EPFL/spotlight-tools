@@ -39,7 +39,6 @@ dependencies = [
 ]
 
 [project.scripts]
-fit-calibration-model = "scripts.fit_calibration:main"
 fit-arena-registration = "scripts.fit_arena_registration:main"
 postprocess-recording = "scripts.postprocess_recording:main"
 visualize-stage-trajectory = "scripts.visualize_stage_trajectory:main"

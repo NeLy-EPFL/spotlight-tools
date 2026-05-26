@@ -1,3 +1,16 @@
+"""
+Muscle frame processing: warp raw PCO-camera TIFF frames into the behavior
+camera's coordinate system and apply the same fly-alignment transforms used
+for the behavior channel.
+
+Spatial mapping uses the legacy spotlight_tools.calibration module
+(SpotlightPositionMapper / BehaviorMuscleCrossMapper), which reads
+calibration_parameters_behavior.yaml and calibration_parameters_muscle.yaml
+saved alongside each recording by the recorder GUI.  An optional homography
+path (homography_parameters.yaml) can be passed instead if a homography
+calibration has been performed.
+"""
+
 import logging
 import cv2
 import numpy as np

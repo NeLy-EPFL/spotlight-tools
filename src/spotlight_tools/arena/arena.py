@@ -256,7 +256,7 @@ class ArenaConfig:
         that pixel (col, row) corresponds exactly to physical position
         (col * R, row * R) in mm. This 1-to-1 alignment is required by the
         C++ ActiveAreaMask warp, which indexes the PNG as mask_col = physical_x/R.
-        Do NOT crop this image — any crop would shift the pixel-to-physical
+        Do NOT crop this image - any crop would shift the pixel-to-physical
         mapping and misplace the mask overlay.
 
         Returns:
@@ -336,7 +336,7 @@ class ArenaConfig:
         )
         img = np.zeros((size_px, size_px), dtype=np.uint8)
         cv2.aruco.generateImageMarker(d, tag_id, size_px, img, borderBits=1)
-        # cv2.aruco renders AprilTag markers 180° rotated relative to the
+        # cv2.aruco renders AprilTag markers 180deg rotated relative to the
         # reference AprilTag library used by pupil_apriltags. Rotating here
         # ensures the printed tag's design orientation matches pupil_apriltags'
         # corner ordering, so _CORNER_KEYS in registration.py is correct.

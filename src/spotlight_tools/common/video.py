@@ -1,3 +1,5 @@
+"""Video I/O helpers: read metadata, write encoded video via vidgear/ffmpeg."""
+
 import cv2
 import numpy as np
 from pathlib import Path

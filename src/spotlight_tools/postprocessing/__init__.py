@@ -1,3 +1,26 @@
+"""
+spotlight_tools.postprocessing -- full offline processing pipeline for recordings.
+
+Modules
+-------
+behavior
+    Decode pseudo-BGR JPEGs, run SLEAP 2-D pose estimation, and produce
+    aligned / cropped behavior video.  Entry point:
+    decode_and_align_all_behavior_frames.
+muscle
+    Warp muscle frames into the behavior-camera coordinate system and apply
+    the same fly-alignment transforms.  Entry point:
+    warp_all_muscle_frames_to_behavior.
+stage
+    Interpolate stage XY positions at each behavior-frame timestamp.
+    Entry point: interp_stage_pos_at_behavior_frames.
+visualize
+    Generate summary video, 2-D pose overlays, muscle-behavior overlay
+    samples, and stage-trajectory plot.
+io
+    Low-level helpers: find per-frame files, check output path consistency.
+"""
+
 from .behavior import (
     decode_and_align_all_behavior_frames,
     expand_single_pseudo_bgr_image,

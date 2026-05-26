@@ -1,3 +1,12 @@
+"""
+Behavior frame processing: decode pseudo-BGR JPEGs, run SLEAP 2-D pose
+estimation, align and crop each frame so the fly faces upward.
+
+The recorder bundles every three consecutive behavior frames into a single
+JPEG file (a performance hack at save time); expand_single_pseudo_bgr_image
+unpacks each such file before any further processing.
+"""
+
 import cv2
 import h5py
 import numpy as np

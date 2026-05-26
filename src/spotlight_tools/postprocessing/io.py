@@ -1,3 +1,5 @@
+"""Low-level I/O helpers for the postprocessing pipeline."""
+
 import logging
 from pathlib import Path
 

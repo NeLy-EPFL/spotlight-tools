@@ -1,3 +1,18 @@
+"""
+Visualization utilities for post-processed recordings:
+
+generate_summary_video
+    Compose an MP4 showing behavior frames, optional 2-D pose skeleton,
+    and optional muscle frames side-by-side.
+generate_overlay_samples
+    Save a set of PNG overlay images showing muscle warped onto behavior
+    for random subsets of frames (useful for visual QC).
+visualize_stage_trajectory
+    Plot the XY stage path over the recording as a coloured line.
+draw_2dpose_on_single_frame
+    Draw SLEAP keypoints and limbs on a single frame array.
+"""
+
 import logging
 import numpy as np
 import pandas as pd

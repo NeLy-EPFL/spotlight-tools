@@ -1,3 +1,8 @@
+"""
+Stage-position interpolation: map stage XY positions (logged at ~75 Hz) onto
+behavior frame timestamps so every frame has an associated stage coordinate.
+"""
+
 import logging
 import numpy as np
 import pandas as pd
