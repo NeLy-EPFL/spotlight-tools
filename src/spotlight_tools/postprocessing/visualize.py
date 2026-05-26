@@ -55,7 +55,7 @@ def visualize_stage_trajectory(
         tuple[Figure, Axes]: The matplotlib Figure and Axes containing the plot.
     """
     behavior_frame_metadata_df = pd.read_csv(behavior_frame_metadata_path)
-    
+
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.set_title("Stage position trajectory")
     ax.set_xlabel("X Position (mm)")

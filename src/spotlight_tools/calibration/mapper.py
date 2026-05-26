@@ -511,15 +511,15 @@ class BehaviorMuscleCrossMapper:
 class HomographyMapper:
     """
     Maps between behavior and muscle camera coordinates using homography transformation.
-    
+
     This class provides methods to convert pixel coordinates between the two cameras
     using the homography matrix computed from ChArUco board calibration.
-    
+
     Args:
         homography_parameters (dict | str | Path): Homography parameters
             as a dictionary, or a path to a YAML file containing the
             homography data.
-    
+
     Example:
         >>> mapper = HomographyMapper("homography_result.yaml")
         >>> muscle_coords = mapper.behavior_to_muscle(behavior_coords)
@@ -542,16 +542,14 @@ class HomographyMapper:
         # Store metadata
         self.metadata = homography_parameters.get("metadata", {})
 
-    def behavior_to_muscle(
-        self, behavior_coords: np.ndarray
-    ) -> np.ndarray:
+    def behavior_to_muscle(self, behavior_coords: np.ndarray) -> np.ndarray:
         """
         Transform coordinates from behavior camera to muscle camera.
-        
+
         Args:
             behavior_coords: Array of shape (N, 2) or (2,) containing (x, y) coordinates
                 in behavior camera pixel space
-        
+
         Returns:
             Array of same shape containing (x, y) coordinates in muscle camera pixel space
         """
@@ -560,31 +558,29 @@ class HomographyMapper:
         if behavior_coords.ndim == 1:
             behavior_coords = behavior_coords.reshape(1, -1)
             single_point = True
-        
+
         # Convert to homogeneous coordinates
         ones = np.ones((behavior_coords.shape[0], 1))
         behavior_homogeneous = np.hstack([behavior_coords, ones])
-        
+
         # Apply homography
         muscle_homogeneous = (self.H_beh2muscle @ behavior_homogeneous.T).T
-        
+
         # Convert back to Cartesian coordinates
         muscle_coords = muscle_homogeneous[:, :2] / muscle_homogeneous[:, 2:3]
-        
+
         if single_point:
             return muscle_coords.flatten()
         return muscle_coords
-    
-    def muscle_to_behavior(
-        self, muscle_coords: np.ndarray
-    ) -> np.ndarray:
+
+    def muscle_to_behavior(self, muscle_coords: np.ndarray) -> np.ndarray:
         """
         Transform coordinates from muscle camera to behavior camera.
-        
+
         Args:
             muscle_coords: Array of shape (N, 2) or (2,) containing (x, y) coordinates
                 in muscle camera pixel space
-        
+
         Returns:
             Array of same shape containing (x, y) coordinates in behavior camera pixel space
         """
@@ -593,33 +589,33 @@ class HomographyMapper:
         if muscle_coords.ndim == 1:
             muscle_coords = muscle_coords.reshape(1, -1)
             single_point = True
-        
+
         # Convert to homogeneous coordinates
         ones = np.ones((muscle_coords.shape[0], 1))
         muscle_homogeneous = np.hstack([muscle_coords, ones])
-        
+
         # Apply homography
         behavior_homogeneous = (self.H_muscle2beh @ muscle_homogeneous.T).T
-        
+
         # Convert back to Cartesian coordinates
         behavior_coords = behavior_homogeneous[:, :2] / behavior_homogeneous[:, 2:3]
-        
+
         if single_point:
             return behavior_coords.flatten()
         return behavior_coords
-    
+
     def warp_image_behavior_to_muscle(
-        self, 
+        self,
         behavior_image: np.ndarray,
         output_shape: tuple[int, int],
     ) -> np.ndarray:
         """
         Warp behavior camera image to muscle camera coordinate system.
-        
+
         Args:
             behavior_image: Behavior camera image
             output_shape: Output image shape (height, width)
-        
+
         Returns:
             Warped image in muscle camera coordinate system
         """
@@ -629,7 +625,7 @@ class HomographyMapper:
             (output_shape[1], output_shape[0]),
             flags=cv2.INTER_LINEAR,
         )
-    
+
     def warp_image_muscle_to_behavior(
         self,
         muscle_image: np.ndarray,
@@ -637,11 +633,11 @@ class HomographyMapper:
     ) -> np.ndarray:
         """
         Warp muscle camera image to behavior camera coordinate system.
-        
+
         Args:
             muscle_image: Muscle camera image
             output_shape: Output image shape (height, width)
-        
+
         Returns:
             Warped image in behavior camera coordinate system
         """

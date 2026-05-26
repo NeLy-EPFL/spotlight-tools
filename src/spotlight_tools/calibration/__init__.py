@@ -10,7 +10,16 @@ into the behavior camera coordinate system.
 For the current arena registration workflow, use spotlight_tools.arena instead.
 """
 
-from .aruco import ArUcoBoard, detect_aruco, plot_aruco_detections
-from .charuco import CharucoBoard, get_gizem_board
-from .model import ransac_filter_outliers, visualize_ransac_results
-from .mapper import SpotlightPositionMapper, BehaviorMuscleCrossMapper, HomographyMapper
+from .aruco import ArUcoBoard as ArUcoBoard
+from .aruco import detect_aruco as detect_aruco
+from .aruco import plot_aruco_detections as plot_aruco_detections
+
+from .charuco import CharucoBoard as CharucoBoard
+from .charuco import get_gizem_board as get_gizem_board
+
+from .model import ransac_filter_outliers as ransac_filter_outliers
+from .model import visualize_ransac_results as visualize_ransac_results
+
+from .mapper import SpotlightPositionMapper as SpotlightPositionMapper
+from .mapper import BehaviorMuscleCrossMapper as BehaviorMuscleCrossMapper
+from .mapper import HomographyMapper as HomographyMapper

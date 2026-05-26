@@ -22,13 +22,8 @@ def generate_trajectory_plot(
     consolidated_metadata_df = pd.read_csv(
         recording_dir / "processed/behavior_frames_metadata.csv"
     )
-    raw_stage_position_log_df = pd.read_csv(
-        recording_dir / "stage_position/stage_position.csv"
-    )
 
-    fig, ax = visualize_stage_trajectory(
-        consolidated_metadata_df
-    )
+    fig, ax = visualize_stage_trajectory(consolidated_metadata_df)
 
     if output_dir is None:
         output_dir = recording_dir / "processed/stage_position_trajectory.png"

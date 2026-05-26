@@ -170,7 +170,6 @@ def visualize_ransac_results(coordinates_df, ransac_results):
     plt.figure(figsize=(12, 10))
 
     # Predictions from RANSAC models
-    X_line = np.array([min(y_x), max(y_x)]).reshape(-1, 1)
     y_pred_x = ransac_model_x.predict(X)
 
     plt.subplot(2, 2, 1)

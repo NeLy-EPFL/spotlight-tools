@@ -121,7 +121,9 @@ def warp_all_muscle_frames_to_behavior(
         if homography_path is None:
             # Try to find homography file in standard location
             # Assume it's in the profile calibration directory
-            homography_path = behavior_calib_path.parent / "metadata/homography_parameters.yaml"
+            homography_path = (
+                behavior_calib_path.parent / "metadata/homography_parameters.yaml"
+            )
             if not homography_path.exists():
                 raise FileNotFoundError(
                     f"Homography file not found at {homography_path}. "
@@ -132,7 +134,9 @@ def warp_all_muscle_frames_to_behavior(
         cross_mapper = None
     else:
         # Use stage-dependent affine mapping
-        logger.info("Using stage-dependent affine transformation from Spotlight calibration")
+        logger.info(
+            "Using stage-dependent affine transformation from Spotlight calibration"
+        )
         behavior_mapper = SpotlightPositionMapper(behavior_calib_path)
         muscle_mapper = SpotlightPositionMapper(muscle_calib_path)
         cross_mapper = BehaviorMuscleCrossMapper(behavior_mapper, muscle_mapper)
@@ -167,7 +171,7 @@ def warp_all_muscle_frames_to_behavior(
         stage_pos = stage_pos_df_at_muscle_frames.iloc[i][
             ["x_pos_mm_interp", "y_pos_mm_interp"]
         ].values.astype(np.float32)
-        
+
         if use_homography:
             # Use homography transformation (stage-independent)
             muscle2behavior_transform_matrix = homography_mapper.H_muscle2beh
@@ -178,7 +182,7 @@ def warp_all_muscle_frames_to_behavior(
                 cross_mapper.get_affine_matrix_muscle2behavior(stage_pos)
             )
             use_perspective = False
-        
+
         behavior_alignment_transform_matrix = alignment_transforms[i]
         output_path = transformed_muscle_images_output_dir / input_path.name
         kwargs = {
@@ -352,38 +356,50 @@ def warp_single_muscle_frame_to_behavior(
     """
     # Load muscle image
     in_image = cv2.imread(str(input_path), cv2.IMREAD_UNCHANGED)
-    
+
     if use_perspective:
         # Homography case: muscle2behavior_trans_mat is 3x3
         # First apply homography, then apply affine alignment
         # We need to compose: alignment @ homography
-        
+
         # Ensure homography is 3x3
         if muscle2behavior_trans_mat.shape == (2, 3):
-            muscle2behavior_trans_mat = np.vstack([muscle2behavior_trans_mat, [0, 0, 1]])
-        
+            muscle2behavior_trans_mat = np.vstack(
+                [muscle2behavior_trans_mat, [0, 0, 1]]
+            )
+
         # Convert affine alignment to 3x3 homogeneous
-        behavior_alignment_trans_mat_3x3 = np.vstack([behavior_alignment_trans_mat, [0, 0, 1]])
-        
+        behavior_alignment_trans_mat_3x3 = np.vstack(
+            [behavior_alignment_trans_mat, [0, 0, 1]]
+        )
+
         # Compose: first homography, then alignment
-        composed_trans_mat = behavior_alignment_trans_mat_3x3 @ muscle2behavior_trans_mat
-        
+        composed_trans_mat = (
+            behavior_alignment_trans_mat_3x3 @ muscle2behavior_trans_mat
+        )
+
         # Apply perspective warp
         out_image = cv2.warpPerspective(in_image, composed_trans_mat, output_dim)
     else:
         # Affine case: both are 2x3, compose them
         # Convert 2x3 transform matrices to 3x3 homogeneous matrices for easier composition
-        muscle2behavior_trans_mat_3x3 = np.vstack([muscle2behavior_trans_mat, [0, 0, 1]])
-        behavior_alignment_trans_mat_3x3 = np.vstack([behavior_alignment_trans_mat, [0, 0, 1]])
+        muscle2behavior_trans_mat_3x3 = np.vstack(
+            [muscle2behavior_trans_mat, [0, 0, 1]]
+        )
+        behavior_alignment_trans_mat_3x3 = np.vstack(
+            [behavior_alignment_trans_mat, [0, 0, 1]]
+        )
 
         # Compose transforms: first muscle->behavior, then apply the same alignment
         # transform that was applied to the behavior frame.
-        composed_trans_mat = behavior_alignment_trans_mat_3x3 @ muscle2behavior_trans_mat_3x3
+        composed_trans_mat = (
+            behavior_alignment_trans_mat_3x3 @ muscle2behavior_trans_mat_3x3
+        )
         assert np.allclose(composed_trans_mat[2, :], [0, 0, 1])
 
         # Convert back to 2x3 for cv2.warpAffine
         composed_trans_mat = composed_trans_mat[:2, :]
-        
+
         # Apply affine warp
         out_image = cv2.warpAffine(in_image, composed_trans_mat, output_dim)
 
