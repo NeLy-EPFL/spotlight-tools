@@ -45,7 +45,7 @@ def warp_all_muscle_frames_to_behavior(
     transformed_muscle_images_output_dir: Path,
     muscle_calib_path: Path,
     behavior_calib_path: Path,
-    dual_recording_timing_path: Path,
+    experiment_parameters_path: Path,
     processed_behavior_frame_metadata_path: Path,
     muscle_metadata_output_path: Path,
     align_fly: bool = True,
@@ -71,7 +71,7 @@ def warp_all_muscle_frames_to_behavior(
         transformed_muscle_images_output_dir (Path): Directory to save output frames.
         muscle_calib_path (Path): Path to muscle camera calibration parameters.
         behavior_calib_path (Path): Path to behavior camera calibration parameters.
-        dual_recording_timing_path (Path): Path to dual recording timing metadata.
+        experiment_parameters_path (Path): Path to the experiment parameters metadata.
         processed_behavior_frame_metadata_path (Path): Path to behavior frames metadata
             (CSV).
         muscle_metadata_output_path (Path): Output path for muscle frames metadata (CSV).
@@ -107,7 +107,7 @@ def warp_all_muscle_frames_to_behavior(
 
     # Get behavior-muscle sync ratio
     behavior_muscle_sync_ratio = get_behavior_muscle_sync_ratio(
-        dual_recording_timing_metadata_path=dual_recording_timing_path
+        experiment_parameters_path=experiment_parameters_path
     )
 
     # Load the stage positions at muscle recording frames
@@ -223,27 +223,79 @@ def warp_all_muscle_frames_to_behavior(
 
 def get_behavior_muscle_sync_ratio(
     *,
-    dual_recording_timing_metadata_path: Path | str | None,
+    experiment_parameters_path: Path | str | None,
     recording_dir: Path | str | None = None,
 ) -> int:
-    """Extract behavior-to-muscle frame synchronization ratio from timing metadata."""
-    if dual_recording_timing_metadata_path is None and recording_dir is None:
+    """Extract the behavior-to-muscle frame synchronization ratio.
+
+    Reads ``muscle_sync_ratio`` from ``experiment_parameters.yaml``. For backward
+    compatibility with recordings made before the timing metadata was merged into
+    ``experiment_parameters.yaml``, it also accepts the legacy ``sync_ratio`` key
+    (written by the now-removed ``dual_recording_timing.yaml``), emitting a
+    deprecation warning. ``experiment_parameters_path`` may point at either file.
+    """
+    if experiment_parameters_path is None and recording_dir is None:
         raise ValueError(
-            "Either dual_recording_timing_path or recording_dir must be provided."
+            "Either experiment_parameters_path or recording_dir must be provided."
         )
-    if dual_recording_timing_metadata_path is not None and recording_dir is not None:
+    if experiment_parameters_path is not None and recording_dir is not None:
         raise ValueError(
-            "Only one of dual_recording_timing_path or recording_dir should be provided."
+            "Only one of experiment_parameters_path or recording_dir should be provided."
         )
 
-    if dual_recording_timing_metadata_path is None:
-        dual_recording_timing_metadata_path = (
-            Path(recording_dir) / "metadata/dual_recording_timing.yaml"
-        )
+    logger = logging.getLogger(__name__)
 
-    with open(dual_recording_timing_metadata_path, "r") as f:
-        timing_metadata = yaml.safe_load(f)
-    return timing_metadata["sync_ratio"]
+    def _read_sync_ratio(path: Path) -> int | None:
+        """Return the sync ratio stored in `path`, or None if it is not there.
+
+        Accepts both the current ``experiment_parameters.yaml`` (``muscle_sync_ratio``)
+        and the legacy ``dual_recording_timing.yaml`` (``sync_ratio``), so the caller
+        may pass either file.
+        """
+        if not path.exists():
+            return None
+        with open(path, "r") as f:
+            metadata = yaml.safe_load(f) or {}
+        if "muscle_sync_ratio" in metadata:
+            return metadata["muscle_sync_ratio"]
+        if "sync_ratio" in metadata:  # legacy dual_recording_timing.yaml
+            logger.warning(
+                "DEPRECATION: reading the behavior-muscle sync ratio from the legacy "
+                "'sync_ratio' key in '%s'. The recorder now writes 'muscle_sync_ratio' "
+                "to 'experiment_parameters.yaml'; legacy support will be removed in a "
+                "future release.",
+                path,
+            )
+            return metadata["sync_ratio"]
+        return None
+
+    # Resolve the metadata file(s) to try, in priority order. A caller may point
+    # experiment_parameters_path at either the current experiment_parameters.yaml or
+    # the legacy dual_recording_timing.yaml -- _read_sync_ratio handles both keys. When
+    # only recording_dir is given, try the current file, then the legacy sibling.
+    if experiment_parameters_path is not None:
+        explicit_path = Path(experiment_parameters_path)
+        candidate_paths = [
+            explicit_path,
+            explicit_path.parent / "dual_recording_timing.yaml",
+        ]
+    else:
+        metadata_dir = Path(recording_dir) / "metadata"
+        candidate_paths = [
+            metadata_dir / "experiment_parameters.yaml",
+            metadata_dir / "dual_recording_timing.yaml",
+        ]
+    candidate_paths = list(dict.fromkeys(candidate_paths))  # dedupe, preserve order
+
+    for path in candidate_paths:
+        sync_ratio = _read_sync_ratio(path)
+        if sync_ratio is not None:
+            return sync_ratio
+
+    raise FileNotFoundError(
+        "Could not determine the behavior-muscle sync ratio from any of: "
+        + ", ".join(f"'{p}'" for p in candidate_paths)
+    )
 
 
 def _get_stage_pos_df_at_muscle_frames(
@@ -442,7 +494,7 @@ def match_muscle_frameid_to_behavior_frameid(
     muscle_frameid: int | list[int],
     *,
     sync_ratio: int | None = None,
-    dual_recording_timing_metadata_path: Path | None = None,
+    experiment_parameters_path: Path | None = None,
     recording_dir: Path | None = None,
 ):
     """Map muscle frame ID or IDs to corresponding behavior frame ID(s) using the
@@ -454,7 +506,7 @@ def match_muscle_frameid_to_behavior_frameid(
     """
     if sync_ratio is None:
         sync_ratio = get_behavior_muscle_sync_ratio(
-            dual_recording_timing_metadata_path=dual_recording_timing_metadata_path,
+            experiment_parameters_path=experiment_parameters_path,
             recording_dir=recording_dir,
         )
 
@@ -474,7 +526,7 @@ def match_behavior_frameid_to_muscle_frameid(
     method: str,
     *,
     sync_ratio: int | None = None,
-    dual_recording_timing_metadata_path: Path | None = None,
+    experiment_parameters_path: Path | None = None,
     recording_dir: Path | None = None,
 ):
     """Map behavior frame ID or IDs to corresponding muscle frame ID(s) using the
@@ -492,7 +544,7 @@ def match_behavior_frameid_to_muscle_frameid(
     """
     if sync_ratio is None:
         sync_ratio = get_behavior_muscle_sync_ratio(
-            dual_recording_timing_metadata_path=dual_recording_timing_metadata_path,
+            experiment_parameters_path=experiment_parameters_path,
             recording_dir=recording_dir,
         )
     if method.lower() not in ["floor", "nearest"]:
@@ -527,7 +579,7 @@ def match_behavior_frameid_to_muscle_frameid(
 #     map_muscle_frames_to_behavior(
 #         muscle_calibration_path=recording_dir / "metadata/calibration_parameters_muscle.yaml",
 #         behavior_calibration_path=recording_dir / "metadata/calibration_parameters_behavior.yaml",
-#         dual_recording_timing_path=recording_dir / "metadata/dual_recording_timing.yaml",
+#         experiment_parameters_path=recording_dir / "metadata/experiment_parameters.yaml",
 #         processed_behavior_frame_metadata_path=recording_dir / "processed/behavior_frames_metadata.csv",
 #         behavior_alignment_metadata_path=recording_dir / "processed/behavior_alignment_transforms.h5",
 #         raw_muscle_images_dir=recording_dir / "muscle_images/",

@@ -37,6 +37,10 @@ dependencies = [
     "torch==2.9.*",
     "torchvision==0.24.*",
     "ruff==0.15.*",
+
+    # TODO: Remove after spotlight_tools.calibration is updated
+    # and the aruco module is fully removed
+    "svgwrite",
 ]
 
 [project.scripts]

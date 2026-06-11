@@ -144,7 +144,7 @@ def postprocess_recording_data(
     muscle_calib_path = metadata_dir / "calibration_parameters_muscle.yaml"
     homography_path = metadata_dir / "homography_parameters.yaml"
     behavior_calib_path = metadata_dir / "calibration_parameters_behavior.yaml"
-    dual_recording_timing_path = metadata_dir / "dual_recording_timing.yaml"
+    experiment_parameters_path = metadata_dir / "experiment_parameters.yaml"
     if with_muscle:
         raw_muscle_images_dir = recording_dir / "muscle_images/"
     # Output
@@ -210,7 +210,7 @@ def postprocess_recording_data(
         warp_all_muscle_frames_to_behavior(
             muscle_calib_path=muscle_calib_path,
             behavior_calib_path=behavior_calib_path,
-            dual_recording_timing_path=dual_recording_timing_path,
+            experiment_parameters_path=experiment_parameters_path,
             processed_behavior_frame_metadata_path=behavior_frames_metadata_path,
             raw_muscle_images_dir=raw_muscle_images_dir,
             transformed_muscle_images_output_dir=processed_muscle_frames_dir,
@@ -233,7 +233,7 @@ def postprocess_recording_data(
             with_muscle=with_muscle,
             draw_2dpose=align_fly,
             muscle_images_dir=processed_muscle_frames_dir,
-            dual_recording_timing_metadata_path=dual_recording_timing_path,
+            experiment_parameters_path=experiment_parameters_path,
             pose_2d_path=alignment_metadata_path,
             muscle_vrange=muscle_vrange,
             play_fps=play_fps,
@@ -252,7 +252,7 @@ def postprocess_recording_data(
                 behavior_video_path=processed_behavior_video_path,
                 muscle_images_dir=processed_muscle_frames_dir,
                 muscle_metadata_path=muscle_frames_metadata_path,
-                dual_recording_timing_metadata_path=dual_recording_timing_path,
+                experiment_parameters_path=experiment_parameters_path,
                 output_dir=overlay_samples_dir,
                 muscle_vrange=muscle_vrange,
                 num_samples=num_muscle_samples,

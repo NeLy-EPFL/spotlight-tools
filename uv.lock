@@ -3073,6 +3073,7 @@ dependencies = [
     { name = "setuptools" },
     { name = "sleap" },
     { name = "sleap-nn" },
+    { name = "svgwrite" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
@@ -3105,6 +3106,7 @@ requires-dist = [
     { name = "setuptools", specifier = ">=78,<79" },
     { name = "sleap", specifier = "==1.5.*" },
     { name = "sleap-nn", specifier = "==0.0.3" },
+    { name = "svgwrite" },
     { name = "torch", specifier = "==2.9.*" },
     { name = "torchvision", specifier = "==0.24.*" },
     { name = "tqdm", specifier = ">=4.67,<5.0" },
@@ -3148,6 +3150,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/16/83/4b694084746a7e58604a46dc5a6911341b5ae332360492262a84a265d110/stringzilla-4.6.1-cp313-cp313-win32.whl", hash = "sha256:e8b2ab69ee28eb79f54754e9b85cad827580f83aab8d5929ac1eb140fe6e7ade", size = 114789, upload-time = "2026-05-05T15:18:30.634Z" },
     { url = "https://files.pythonhosted.org/packages/97/db/c917b8c9428f647bcd04433e66110cbcd63cee1075f735bb3c7ae6b2ba20/stringzilla-4.6.1-cp313-cp313-win_amd64.whl", hash = "sha256:a9da1feb660085a00f8c8e781be85a4984e6a4504f7804af1b13fdf5563a41b7", size = 162555, upload-time = "2026-05-05T15:18:32.638Z" },
     { url = "https://files.pythonhosted.org/packages/e9/7c/350482e963262ff6cfb7d094fe5254c6a432c21ce971d83e98a23268a2ed/stringzilla-4.6.1-cp313-cp313-win_arm64.whl", hash = "sha256:c2cc745ce598af8cdd5067b923ba7631bbe5e77b9d552b7d5a29135566ea3bec", size = 123329, upload-time = "2026-05-05T15:18:34.336Z" },
+]
+
+[[package]]
+name = "svgwrite"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/c1/263d4e93b543390d86d8eb4fc23d9ce8a8d6efd146f9427364109004fa9b/svgwrite-1.4.3.zip", hash = "sha256:a8fbdfd4443302a6619a7f76bc937fc683daf2628d9b737c891ec08b8ce524c3", size = 189516, upload-time = "2022-07-14T14:05:26.107Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/15/640e399579024a6875918839454025bb1d5f850bb70d96a11eabb644d11c/svgwrite-1.4.3-py3-none-any.whl", hash = "sha256:bb6b2b5450f1edbfa597d924f9ac2dd099e625562e492021d7dd614f65f8a22d", size = 67122, upload-time = "2022-07-14T14:05:24.459Z" },
 ]
 
 [[package]]
